@@ -1,0 +1,518 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ready 與 Sandy 的訊息故事</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-image: linear-gradient(to bottom, #f0f4f8, #e0e7ef);
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .chat-app {
+      max-width: 400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .chat-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 120px);
+      scroll-behavior: smooth;
+    }
+    .chat-bubble {
+      max-width: 75%;
+      padding: 0.75rem 1rem;
+      border-radius: 1.5rem;
+      margin-bottom: 1rem;
+      word-wrap: break-word;
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chat-bubble::after {
+      content: attr(data-time);
+      display: block;
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 0.25rem;
+    }
+    .sandy {
+      background-color: #fce7f3;
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+    }
+    .ready {
+      background-color: #dbeafe;
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #888;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+    .choices-container {
+      padding: 1rem;
+      background: #f9fafb;
+      border-top: 1px solid #e5e7eb;
+    }
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-app">
+    <div class="p-4 flex justify-between items-center bg-gray-100 border-b">
+      <h1 class="text-lg font-bold">與 Sandy 的對話</h1>
+    </div>
+    <div id="chat" class="chat-container"></div>
+    <div id="choices" class="choices-container flex flex-col space-y-2"></div>
+  </div>
+
+  <script>
+    const chatEl = document.getElementById('chat');
+    const choicesEl = document.getElementById('choices');
+
+    let state = {
+      trust: 0,
+      mood: 0,
+      dependency: 0,
+      intimatemoment: 0,
+      selfawareness: 0,
+      morality: 0,
+      conversationCount: 0,
+      scene: 'start',
+      history: [],
+      lastHint: '' // 新增變數追蹤上一次提示
+    };
+
+    const scenes = {
+      start: {
+        message: "Sandy：唉…又是一個亂七八糟的夜晚。",
+        choices: [
+          { text: "怎麼了？想聊聊嗎？", effect: { trust: 1, conversationCount: 1 }, next: 'open_up' },
+          { text: "這次又是學長還是男友的事？", effect: { mood: -1, conversationCount: 1 }, next: 'defensive' },
+          { text: "晚安，妳累了就早點休息。", effect: { conversationCount: 1 }, next: 'cold' }
+        ]
+      },
+      open_up: {
+        message: "Sandy：學弟今天又傳訊息給我，我真的覺得很煩，但又不知道怎麼拒絕…",
+        choices: [
+          { text: "如果不想理他，就明講啊，妳不是一向很果斷？", effect: { mood: -1, conversationCount: 1 }, next: 'challenged' },
+          { text: "妳是不是怕他受傷？", effect: { trust: 1, dependency: 1, conversationCount: 1 }, next: 'soften' },
+          { text: "所以…妳其實對他還有點在意？", effect: { mood: -1, conversationCount: 1 }, next: 'jealousy' }
+        ]
+      },
+      defensive: {
+        message: "Sandy：你也來酸我啊？原來你跟他們一樣。",
+        choices: [
+          { text: "我不是酸，我只是關心。", effect: { trust: 1, conversationCount: 1 }, next: 'soften' },
+          { text: "…抱歉，我不該這樣問。", effect: { trust: 0, conversationCount: 1 }, next: 'soften' }
+        ]
+      },
+      cold: {
+        message: "Sandy：嗯…好吧，那晚安。",
+        choices: []
+      },
+      challenged: {
+        message: "Sandy：你怎麼會這樣說，我哪有果斷…我根本什麼都搞不清楚。",
+        choices: [
+          { text: "那就別勉強自己，妳有權選擇對自己好的事。", effect: { trust: 1, dependency: 1, conversationCount: 1 }, next: 'soften' },
+          { text: "難道妳一直都這樣讓自己陷在亂七八糟的關係裡？", effect: { mood: -1, selfawareness: 1, conversationCount: 1 }, next: 'self_reflection' }
+        ]
+      },
+      soften: {
+        message: "Sandy：你總是這樣…講話讓我有點安心。",
+        choices: [
+          { text: "那妳願意多讓我了解妳嗎？", effect: { trust: 1, conversationCount: 1 }, next: 'bonding' },
+          { text: "只是我也擔心自己會不會只是其中一個。", effect: { mood: -1, conversationCount: 1 }, next: 'defensive2' }
+        ]
+      },
+      jealousy: {
+        message: "Sandy：你是來審問我？你根本不懂我。",
+        choices: [
+          { text: "我只是想知道妳真實的感受。", effect: { trust: 1, conversationCount: 1 }, next: 'bonding' },
+          { text: "好吧，可能是我想太多了。", effect: { mood: -1, conversationCount: 1 }, next: 'cold' }
+        ]
+      },
+      defensive2: {
+        message: "Sandy：……那你想怎樣？放棄嗎？",
+        choices: [
+          { text: "不，我想更了解真正的妳。", effect: { trust: 1, conversationCount: 1 }, next: 'bonding' }
+        ]
+      },
+      bonding: {
+        message: "Sandy：……或許，我真的有點想靠近你看看。",
+        choices: [
+          { text: "我也一樣，我會好好陪著妳。", effect: { trust: 1, dependency: 1, conversationCount: 1 }, next: 'secret_past' },
+          { text: "那妳準備好面對真正的感情了嗎？", effect: { trust: -1, conversationCount: 1 }, next: 'ending_doubt' },
+          { text: "但妳對其他人呢？妳真的能放下那些關係？", effect: { mood: -1, selfawareness: 1, conversationCount: 1 }, next: 'confrontation' }
+        ]
+      },
+      secret_past: {
+        message: "Sandy：你知道嗎…我以前曾經也試著相信一個人，結果被當工具人利用，連我自己都開始懷疑自己有沒有價值…",
+        choices: [
+          { text: "我不會是那樣的人，妳可以慢慢觀察我。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'trust_building' },
+          { text: "聽起來妳的傷真的很深…我會更小心對待妳。", effect: { dependency: 1, conversationCount: 1 }, next: 'dependency_path' },
+          { text: "但妳現在的行為…不也是在傷害別人嗎？", effect: { mood: -1, selfawareness: 1, morality: 1, conversationCount: 1 }, next: 'self_reflection' }
+        ]
+      },
+      trust_building: {
+        message: "Sandy：……謝謝你。真的。如果你願意，我想再相信一次看看。",
+        choices: [
+          { text: "那我們就一起慢慢來，不急。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'event_photo' },
+          { text: "我不想只當個安慰角色，我希望我們是對等的。", effect: { mood: -1, selfawareness: 1, conversationCount: 1 }, next: 'ending_distance' }
+        ]
+      },
+      event_photo: {
+        message: "Sandy：（傳了一張照片）這是我今天跟朋友出去玩拍的，覺得如何？",
+        choices: [
+          { text: "看起來很開心！背景那個男生是誰？", effect: { mood: -1, conversationCount: 1 }, next: 'jealousy' },
+          { text: "很漂亮！妳今天心情不錯吧？", effect: { mood: 1, trust: 1, conversationCount: 1 }, next: 'deep_bonding' },
+          { text: "照片很好看，但妳真的開心嗎？", effect: { selfawareness: 1, conversationCount: 1 }, next: 'self_reflection2' }
+        ]
+      },
+      self_reflection: {
+        message: "Sandy：你為什麼要這樣說？我…我只是想讓自己好過一點。我知道我做錯了很多事，但你有沒有想過我有多痛苦？",
+        choices: [
+          { text: "我明白妳的痛苦，但繼續這樣只會讓妳更難受。", effect: { trust: 1, selfawareness: 1, conversationCount: 1 }, next: 'growth_path' },
+          { text: "對不起，我不該逼妳面對這些。", effect: { dependency: 1, mood: 1, conversationCount: 1 }, next: 'dependency_path' },
+          { text: "那妳有沒有想過，妳的男友也許比妳更痛苦？", effect: { mood: -2, selfawareness: 2, morality: 1, conversationCount: 1 }, next: 'confrontation' }
+        ]
+      },
+      self_reflection2: {
+        message: "Sandy：……你怎麼總是能看穿我？我表面上笑得很開心，但其實心裡亂糟糟的。",
+        choices: [
+          { text: "我知道妳不容易，慢慢說，我會聽。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'deep_bonding' },
+          { text: "或許妳該試著面對自己的感受，而不是逃避。", effect: { selfawareness: 1, mood: -1, conversationCount: 1 }, next: 'growth_path' }
+        ]
+      },
+      confrontation: {
+        message: "Sandy：你憑什麼這樣指責我？你知道我有多討厭自己嗎？我不想再聊了！",
+        choices: [
+          { text: "我不是指責，我只是希望妳能為自己好。", effect: { trust: 1, selfawareness: 1, conversationCount: 1 }, next: 'growth_path' },
+          { text: "好吧，妳不想聊我也不勉強。", effect: { mood: -1, conversationCount: 1 }, next: 'ending_cold' },
+          { text: "如果妳繼續這樣，連我也不想再理妳了。", effect: { trust: -2, mood: -2, conversationCount: 1 }, next: 'ending_break' }
+        ]
+      },
+      dependency_path: {
+        message: "Sandy：你真的很會安慰我…有時候我覺得，只有跟你聊天我才不會那麼亂。",
+        choices: [
+          { text: "我會一直在這，但妳也要試著整理自己的生活哦。", effect: { trust: 1, selfawareness: 1, conversationCount: 1 }, next: 'growth_path' },
+          { text: "那我可以一直陪著妳，隨時找我。", effect: { dependency: 2, intimatemoment: 1, conversationCount: 1 }, next: 'casual_path' },
+          { text: "但我不想只是當妳的樹洞，妳有沒有想過改變？", effect: { mood: -1, selfawareness: 1, conversationCount: 1 }, next: 'confrontation' }
+        ]
+      },
+      casual_path: {
+        message: "Sandy：哈哈，學弟你真的很可愛。這樣吧，改天請你喝咖啡，算我謝謝你哦～",
+        choices: [
+          { text: "好啊，不過我希望我們不只是喝咖啡的關係。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'deep_bonding' },
+          { text: "咖啡？該不會又是妳的『折扣活動』吧？", effect: { mood: 1, selfawareness: -1, conversationCount: 1 }, next: 'flirt_path' },
+          { text: "謝了，但我想我們還是保持點距離比較好。", effect: { trust: -1, mood: -1, conversationCount: 1 }, next: 'ending_distance' }
+        ]
+      },
+      flirt_path: {
+        message: "Sandy：哈哈，學弟你還挺會講的！要不要試試我的『VIP折扣』？開玩笑啦～不過你真的挺有趣的。",
+        choices: [
+          { text: "別開玩笑了，我想認真了解妳。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'deep_bonding' },
+          { text: "VIP折扣？那我得先看看菜單！", effect: { mood: 1, dependency: 1, selfawareness: -1, conversationCount: 1 }, next: 'casual_encounter' }
+        ]
+      },
+      casual_encounter: {
+        message: "Sandy：哈哈，你還真敢接話！那…要不要今晚見個面？我心情有點悶，陪陪我？",
+        choices: [
+          { text: "好啊，但我們只是單純見面聊聊，對吧？", effect: { trust: 1, conversationCount: 1 }, next: 'deep_bonding' },
+          { text: "嗯…好吧，見面也可以。", effect: { dependency: 2, intimatemoment: 1, selfawareness: -1, conversationCount: 1 }, next: 'casual_continue' },
+          { text: "Sandy，這樣下去對妳真的好吗？", effect: { mood: -1, selfawareness: 1, morality: 1, conversationCount: 1 }, next: 'self_reflection2' }
+        ]
+      },
+      casual_continue: {
+        message: "Sandy：（幾天後）那天晚上還不錯吧？學弟你真的挺會哄人的，哈哈。要不要再約？",
+        choices: [
+          { text: "那天確實不錯，但我想我們可以試著更認真一點。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'deep_bonding' },
+          { text: "哈哈，隨時都可以啊，妳說了算！", effect: { dependency: 1, selfawareness: -1, conversationCount: 1 }, next: 'ending_casual' },
+          { text: "我覺得我們這樣不太對，妳有沒有想過改變？", effect: { mood: -1, selfawareness: 1, morality: 1, conversationCount: 1 }, next: 'growth_path' }
+        ]
+      },
+      growth_path: {
+        message: "Sandy：你說的對…我不能一直這樣下去。或許我該試著改變一點，比如…跟某些人說清楚。",
+        choices: [
+          { text: "這是好的開始，我會支持妳的。", effect: { trust: 1, selfawareness: 1, intimatemoment: 1, conversationCount: 1 }, next: 'event_boyfriend' },
+          { text: "改變不容易，但如果妳願意，我可以陪妳一起面對。", effect: { trust: 1, dependency: 1, intimatemoment: 1, conversationCount: 1 }, next: 'event_boyfriend' },
+          { text: "說清楚是應該的，尤其是對妳男友。", effect: { mood: -1, selfawareness: 1, morality: 1, conversationCount: 1 }, next: 'boyfriend_confront' }
+        ]
+      },
+      event_boyfriend: {
+        message: "Sandy：（幾天後）我跟男友大吵了一架…他發現我跟學長的事，現在氣得不想理我了。我是不是真的很糟糕？",
+        choices: [
+          { text: "妳不是糟糕，只是做了錯的選擇。現在還有機會彌補。", effect: { trust: 1, selfawareness: 1, conversationCount: 1 }, next: 'redemption_path' },
+          { text: "他生氣很正常，妳得先誠實面對他。", effect: { mood: -1, selfawareness: 2, morality: 1, conversationCount: 1 }, next: 'boyfriend_confront' },
+          { text: "別想太多，他會原諒妳的。", effect: { dependency: 1, selfawareness: -1, conversationCount: 1 }, next: 'dependency_path' }
+        ]
+      },
+      boyfriend_confront: {
+        message: "Sandy：你又提他幹嘛？我知道我對他不好，但…他也沒那麼完美啊！而且他根本不知道那些事。",
+        choices: [
+          { text: "他不知道，但這公平嗎？妳有沒有想過他的感受？", effect: { mood: -1, selfawareness: 2, morality: 1, conversationCount: 1 }, next: 'redemption_path' },
+          { text: "好吧，我不該干涉妳的感情。", effect: { trust: -1, mood: 1, conversationCount: 1 }, next: 'dependency_path' },
+          { text: "如果妳不愛他，就放手吧，別再傷害彼此了。", effect: { trust: 1, selfawareness: 2, conversationCount: 1 }, next: 'redemption_path' }
+        ]
+      },
+      redemption_path: {
+        message: "Sandy：我決定了，我要跟學長還有其他人說清楚。我不想再這樣下去了…你會支持我吧？",
+        choices: [
+          { text: "當然，我會陪著妳，妳很勇敢。", effect: { trust: 1, intimatemoment: 1, selfawareness: 1, conversationCount: 1 }, next: 'event_professor' },
+          { text: "這是妳自己的選擇，我相信妳能做好。", effect: { selfawareness: 1, dependency: -1, conversationCount: 1 }, next: 'independent_path' }
+        ]
+      },
+      event_professor: {
+        message: "Sandy：（幾天後）我跟教授攤牌了，他居然說我只是『可有可無的學生』…我真的好難過，覺得自己好蠢。",
+        choices: [
+          { text: "他說這種話才蠢，妳值得更好的。", effect: { trust: 1, intimatemoment: 1, conversationCount: 1 }, next: 'deep_bonding2' },
+          { text: "妳已經很勇敢了，放下他就是對自己好。", effect: { selfawareness: 1, conversationCount: 1 }, next: 'redemption_path2' },
+          { text: "或許妳該先冷靜，別讓他的話影響妳。", effect: { mood: 1, dependency: 1, conversationCount: 1 }, next: 'dependency_path' }
+        ]
+      },
+      independent_path: {
+        message: "Sandy：謝謝你讓我看清自己。我決定先一個人好好想想未來，暫時不想依賴任何人。",
+        choices: [
+          { text: "我尊重妳的決定，隨時需要我就在這。", effect: { trust: 1, conversationCount: 1 }, next: 'ending_independent' },
+          { text: "這樣很好，妳會找到屬於自己的路。", effect: { selfawareness: 1, conversationCount: 1 }, next: 'ending_independent' }
+        ]
+      },
+      deep_bonding: {
+        message: "Sandy：跟你聊天…我好像真的開始覺得，或許我可以試著相信一個人，不只是利用或被利用。",
+        choices: [
+          { text: "我很開心聽到這話，我們可以一起試試看。", effect: { trust: 1, intimatemoment: 2, conversationCount: 1 }, next: 'event_boyfriend' },
+          { text: "但妳得先對自己誠實，妳真的準備好了嗎？", effect: { selfawareness: 1, mood: -1, conversationCount: 1 }, next: 'ending_doubt' },
+          { text: "我希望我們是朋友，這樣對妳我都更好。", effect: { trust: 1, intimatemoment: -1, conversationCount: 1 }, next: 'ending_friend' }
+        ]
+      },
+      deep_bonding2: {
+        message: "Sandy：你總是知道怎麼讓我好過一點…我開始覺得，或許跟你在一起會不一樣。",
+        choices: [
+          { text: "我也這麼覺得，我們可以慢慢來。", effect: { trust: 1, intimatemoment: 2, conversationCount: 1 }, next: 'final_bonding' },
+          { text: "但妳得先整理好自己的過去，不然我們很難開始。", effect: { selfawareness: 1, mood: -1, conversationCount: 1 }, next: 'redemption_path2' }
+        ]
+      },
+      redemption_path2: {
+        message: "Sandy：我真的下定決心了，我要結束那些亂七八糟的關係，重新開始。你會不會覺得我現在才有點像個人？",
+        choices: [
+          { text: "妳一直是個很好的人，只是需要時間找回自己。", effect: { trust: 1, intimatemoment: 1, selfawareness: 1, conversationCount: 1 }, next: 'final_bonding' },
+          { text: "這一步很了不起，我相信妳會越來越好。", effect: { selfawareness: 1, conversationCount: 1 }, next: 'ending_redemption' }
+        ]
+      },
+      final_bonding: {
+        message: "Sandy：（幾天後）我把所有事情都處理好了，學長、教授，還有男友…我終於覺得自己有點自由了。你還願意陪我嗎？",
+        choices: [
+          { text: "當然，我一直都在，妳已經很棒了。", effect: { trust: 1, intimatemoment: 2, conversationCount: 1 }, next: 'ending_intimate' },
+          { text: "我很高興妳做到了，但我覺得我們還是朋友最好。", effect: { trust: 1, conversationCount: 1 }, next: 'ending_friend' }
+        ]
+      },
+      ending_intimate: {
+        message: "Sandy：謝謝你，Ready。我從沒想過自己能走到這一步。或許我們可以試著…一起開始新的生活？",
+        choices: []
+      },
+      ending_distance: {
+        message: "Sandy：或許我們想要的東西不太一樣吧…不過謝謝你曾經陪我說話。",
+        choices: []
+      },
+      ending_doubt: {
+        message: "Sandy：你太快了…我還沒準備好。對不起…",
+        choices: []
+      },
+      ending_cold: {
+        message: "Sandy：我真的沒心情再聊了…先這樣吧。",
+        choices: []
+      },
+      ending_break: {
+        message: "Sandy：好啊，你也放棄我吧！反正我早就習慣了！（她把你封鎖了）",
+        choices: []
+      },
+      ending_casual: {
+        message: "Sandy：哈哈，學弟你真的很有趣。以後有空就找你，說不定還有『優惠活動』哦～",
+        choices: []
+      },
+      ending_friend: {
+        message: "Sandy：朋友啊…聽起來也不錯。謝謝你，Ready，我知道我可以信任你。",
+        choices: []
+      },
+      ending_redemption: {
+        message: "Sandy：我跟他們都說清楚了，連男友也是…雖然很痛，但謝謝你陪我走到這一步。我想，我終於可以重新開始了。",
+        choices: []
+      },
+      ending_independent: {
+        message: "Sandy：謝謝你讓我看清自己。我決定一個人好好想想未來，或許我們以後還是朋友。謝謝你，真的。",
+        choices: []
+      }
+    };
+
+    function getHint() {
+      const { trust, mood, dependency, intimatemoment, selfawareness, morality, conversationCount } = state;
+      if (conversationCount >= 20 && trust >= 8 && intimatemoment >= 6) return "Sandy對你完全敞開心房，她似乎準備好迎接真正的感情了！";
+      if (conversationCount >= 15 && selfawareness >= 5) return "Sandy正在改變，她開始認真思考自己的行為和未來。";
+      if (dependency >= 5) return "Sandy對你非常依賴，但這對她的成長真的好吗？";
+      if (mood <= -4) return "Sandy的語氣非常冷淡，可能隨時會結束對話。";
+      if (morality >= 3 && mood <= -2) return "Sandy對你的質疑感到不滿，但她似乎開始反省了。";
+      if (trust <= -3) return "Sandy對你失去了信任，關係可能很難挽回。";
+      if (intimatemoment >= 3 && selfawareness <= 1) return "Sandy對你有好感，但她似乎還沒準備好改變自己的生活。";
+      if (conversationCount >= 10 && intimatemoment >= 2) return "Sandy開始對你產生感情，但她的過去還需要更多時間整理。";
+      return null;
+    }
+
+    function formatTime() {
+      const now = new Date();
+      return now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    }
+
+    function renderScene(key) {
+      const scene = scenes[key];
+      state.scene = key;
+      state.history.push(key);
+
+      // 時間跳躍提示
+      if (['deep_bonding', 'event_boyfriend', 'event_professor', 'final_bonding'].includes(key)) {
+        const timeSkip = document.createElement('div');
+        timeSkip.className = 'hint';
+        timeSkip.textContent = '（幾天後）';
+        chatEl.appendChild(timeSkip);
+      }
+
+      const msg = document.createElement('div');
+      msg.className = 'chat-bubble sandy';
+      msg.textContent = scene.message;
+      msg.setAttribute('data-time', formatTime());
+      chatEl.appendChild(msg);
+
+      // 僅在提示變化時顯示
+      const hint = getHint();
+      if (hint && hint !== state.lastHint) {
+        const hintEl = document.createElement('div');
+        hintEl.className = 'hint';
+        hintEl.textContent = '（系統提示）' + hint;
+        chatEl.appendChild(hintEl);
+        state.lastHint = hint; // 更新最後提示
+      }
+
+      // 自動滾動到最新訊息
+      setTimeout(() => {
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }, 100);
+
+      choicesEl.innerHTML = '';
+
+      if (scene.choices.length === 0) {
+        const end = document.createElement('div');
+        end.className = 'text-center text-sm text-gray-500 mt-4';
+        end.textContent = '（故事已結束）';
+        choicesEl.appendChild(end);
+
+        const replay = document.createElement('button');
+        replay.className = 'mt-2 text-blue-500 underline';
+        replay.textContent = '重新開始';
+        replay.onclick = () => location.reload();
+        choicesEl.appendChild(replay);
+        return;
+      }
+
+      // 動態添加隱藏選項
+      let choices = [...scene.choices];
+      if (key === 'bonding' && state.trust >= 4 && state.selfawareness >= 2) {
+        choices.push({
+          text: "Sandy，妳有沒有想過跟男友坦白一切？",
+          effect: { selfawareness: 1, morality: 1, conversationCount: 1 },
+          next: 'boyfriend_confront'
+        });
+      }
+      if (key === 'deep_bonding' && state.conversationCount >= 10 && state.intimatemoment >= 3) {
+        choices.push({
+          text: "我覺得我們可以試著更進一步，但妳準備好了嗎？",
+          effect: { intimatemoment: 1, conversationCount: 1 },
+          next: 'final_bonding'
+        });
+      }
+
+      choices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 text-left';
+        btn.textContent = choice.text;
+        btn.onclick = () => {
+          Object.entries(choice.effect).forEach(([key, val]) => {
+            state[key] = (state[key] || 0) + val;
+          });
+
+          const reply = document.createElement('div');
+          reply.className = 'chat-bubble ready';
+          reply.textContent = choice.text;
+          reply.setAttribute('data-time', formatTime());
+          chatEl.appendChild(reply);
+
+          renderScene(choice.next);
+        };
+        choicesEl.appendChild(btn);
+      });
+    }
+
+    renderScene(state.scene);
+  </script>
+</body>
+</html>
