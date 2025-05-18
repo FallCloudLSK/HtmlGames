@@ -1,0 +1,1296 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>菜雞互啄 v1.0.11</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+  </script>
+  <style>
+    *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::before,::after{--tw-content:''}html{font-family:ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";line-height:1.5}body{margin:0;line-height:inherit}.hidden{display:none}.min-h-screen{min-height:100vh}.w-1\/2{width:50%}.w-full{width:100%}.max-w-4xl{max-width:64rem}.h-4{height:1rem}.px-4{padding-left:1rem;padding-right:1rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.p-2{padding:.5rem}.p-4{padding:1rem}.p-6{padding:1.5rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.ml-2{margin-left:.5rem}.mr-2{margin-right:.5rem}.min-h-\[40px\]{min-height:40px}.min-h-\[60px\]{min-height:60px}.cursor-pointer{cursor:pointer}.flex{display:flex}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.space-x-4>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(1rem*var(--tw-space-x-reverse));margin-left:calc(1rem*(1 - var(--tw-space-x-reverse)))}.rounded{border-radius:.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.border-4{border-width:4px}.border-blue-500{border-color:#3b82f6}.bg-blue-100{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity))}.bg-blue-200{--tw-bg-opacity:1;background-color:rgb(191 219 254/var(--tw-bg-opacity))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity))}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235/var(--tw-bg-opacity))}.bg-green-100{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity))}.bg-green-500{--tw-bg-opacity:1;background-color:rgb(34 197 94/var(--tw-bg-opacity))}.bg-orange-100{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity))}.bg-purple-100{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity))}.bg-red-100{--tw-bg-opacity:1;background-color:rgb(254 226 226/var(--tw-bg-opacity))}.bg-red-500{--tw-bg-opacity:1;background-color:rgb(239 68 68/var(--tw-bg-opacity))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity))}.bg-yellow-100{--tw-bg-opacity:1;background-color:rgb(254 249 195/var(--tw-bg-opacity))}.bg-opacity-80{--tw-bg-opacity:.8}.shadow{--tw-shadow:0 1px 3px 0 rgb(0 0 0 / .1),0 1px 2px -1px rgb(0 0 0 / .1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color),0 1px 2px -1px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / .1),0 4px 6px -4px rgb(0 0 0 / .1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-6xl{font-size:3.75rem;line-height:1}.font-bold{font-weight:700}.font-semibold{font-weight:600}.text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity))}.text-right{text-align:right}.text-center{text-align:center}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity))}.hover\:bg-blue-600:hover{--tw-bg-opacity:1;background-color:rgb(37 99 235/var(--tw-bg-opacity))}.hover\:bg-green-600:hover{--tw-bg-opacity:1;background-color:rgb(22 163 74/var(--tw-bg-opacity))}.hover\:bg-gray-100:hover{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity))}.hover\:bg-opacity-80:hover{--tw-bg-opacity:.8}.disabled\:bg-gray-400:disabled{--tw-bg-opacity:1;background-color:rgb(156 163 175/var(--tw-bg-opacity))}.animate-bounce{animation:bounce 1s infinite}@keyframes bounce{0%,100%{transform:translateY(-25%);animation-timing-function:cubic-bezier(.8,0,1,1)}50%{transform:none;animation-timing-function:cubic-bezier(0,0,.2,1)}}
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="game-container" class="flex flex-col items-center justify-center min-h-screen">
+    <div id="title-screen" class="text-center">
+      <h1 class="text-6xl font-bold text-blue-600 animate-bounce">菜雞互啄</h1>
+      <p class="text-2xl text-gray-600 mt-2">版本 1.0.11</p>
+    </div>
+    <div id="game-screen" class="hidden w-full max-w-4xl bg-white p-6 rounded-lg shadow-lg">
+      <div id="battle-counter" class="text-xl font-semibold mb-4">第 1 戰</div>
+      <div class="flex justify-between mb-6">
+        <div class="w-1/2">
+          <h2 id="player-name" class="text-2xl font-bold">豆豆鴿</h2>
+          <div class="flex items-center">
+            <div class="w-full bg-gray-200 rounded-full h-4">
+              <div id="player-hp-bar" class="bg-green-500 h-4 rounded-full" style="width: 100%"></div>
+            </div>
+            <span id="player-hp" class="ml-2">80 / 80</span>
+          </div>
+          <div class="mt-2">
+            <p>絕招點: <span id="player-ultimate-points">●●</span></p>
+            <p>特性: <span id="player-traits"></span></p>
+            <p>招式: <span id="player-ultimates"></span></p>
+            <p>力量: <span id="player-strength">C</span></p>
+            <p>敏捷: <span id="player-agility">C</span></p>
+            <p>集中: <span id="player-focus">C</span></p>
+            <p>直覺: <span id="player-intuition">C</span></p>
+          </div>
+        </div>
+        <div class="w-1/2 text-right">
+          <h2 id="enemy-name" class="text-2xl font-bold">???</h2>
+          <div class="flex items-center justify-end">
+            <span id="enemy-hp" class="mr-2">80 / 80</span>
+            <div class="w-full bg-gray-200 rounded-full h-4">
+              <div id="enemy-hp-bar" class="bg-red-500 h-4 rounded-full" style="width: 100%"></div>
+            </div>
+          </div>
+          <div class="mt-2">
+            <p>絕招點: <span id="enemy-ultimate-points">●●</span></p>
+            <p>特性: <span id="enemy-traits"></span></p>
+            <p>招式: <span id="enemy-ultimates">????</span></p>
+            <p>力量: <span id="enemy-strength">C</span></p>
+            <p>敏捷: <span id="enemy-agility">C</span></p>
+            <p>集中: <span id="enemy-focus">C</span></p>
+            <p>直覺: <span id="enemy-intuition">C</span></p>
+          </div>
+        </div>
+      </div>
+      <div id="battle-log" class="text-center mb-4 p-2 bg-gray-100 rounded min-h-[60px]"></div>
+      <div id="trait-selection" class="text-center">
+        <h3 id="selection-title" class="text-xl font-semibold mb-4">選擇一個角色</h3>
+        <div id="trait-options" class="flex justify-center space-x-4"></div>
+      </div>
+      <div id="battle-screen" class="hidden">
+        <div id="player-hand" class="flex justify-center space-x-4 mb-6"></div>
+        <div class="text-center">
+          <button id="play-card" class="bg-blue-500 text-white px-6 py-3 rounded text-lg hover:bg-blue-600 disabled:bg-gray-400" disabled>出牌</button>
+        </div>
+      </div>
+      <div id="game-over" class="hidden text-center">
+        <h2 id="game-result" class="text-3xl font-bold mb-4"></h2>
+        <button id="next-battle" class="hidden bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">下一戰</button>
+        <button id="restart" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">重新挑戰</button>
+      </div>
+      <div id="victory-screen" class="hidden text-center">
+        <h2 class="text-3xl font-bold mb-4">恭喜成為菜雞之王！</h2>
+        <p id="victory-message" class="text-xl mb-4"></p>
+        <button id="restart-victory" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">重新挑戰</button>
+      </div>
+      <div id="info-bar" class="mt-4 p-2 bg-gray-100 rounded text-center min-h-[40px]"></div>
+    </div>
+  </div>
+  <script>
+    const cards = {
+      wing: { name: "翅", desc: "拍打傷害，依力量增傷，4+力量*2傷害，有機率觸發爆擊", damage: 4, stat: "strength", multiplier: 2 },
+      claw: { name: "爪", desc: "斬切傷害，依敏捷增傷，1+敏捷*3傷害，有機率觸發爆擊", damage: 1, stat: "agility", multiplier: 3 },
+      beak: { name: "嘴", desc: "穿刺傷害，依集中增傷，7+集中*1傷害，有機率觸發爆擊", damage: 7, stat: "focus", multiplier: 1 },
+      block: { name: "擋", desc: "防禦本回合攻擊，無法防禦穿刺傷害", effect: "block" },
+      dodge: { name: "跳", desc: "迴避本回合攻擊，依雙方直覺調整機率", effect: "dodge", baseDodge: 0.5 },
+      ultimate: { name: "絕", desc: "恢復1點絕招點，或組成招式時可視為任意牌", effect: "ultimate" },
+      rest: { name: "憩", desc: "恢復 8 點生命，若對手未攻擊則加倍至 16 點", heal: 8 }
+    };
+    const traits = {
+      warrior: { 
+        name: "戰士", 
+        desc: "力量+1", 
+        type: "common", 
+        effect: (character) => { character.stats.strength++; } 
+      },
+      thief: { 
+        name: "盜賊", 
+        desc: "敏捷+1", 
+        type: "common", 
+        effect: (character) => { character.stats.agility++; } 
+      },
+      archer: { 
+        name: "弓手", 
+        desc: "集中+1", 
+        type: "common", 
+        effect: (character) => { character.stats.focus++; } 
+      },
+      knight: { 
+        name: "騎士", 
+        desc: "生命+10", 
+        type: "common", 
+        effect: (character) => { character.maxHp += 10; character.hp += 10; } 
+      },
+      mage: { 
+        name: "法師", 
+        desc: "絕招點+1（含上限）", 
+        type: "common", 
+        effect: (character) => { 
+          character.ultimatePoints = Math.min(character.ultimatePointsCap + 1, character.ultimatePoints + 1); 
+          character.ultimatePointsCap++; 
+        } 
+      },
+      multiWing: { 
+        name: "多翅", 
+        desc: "獲得一張翅", 
+        type: "common", 
+        effect: (character) => { character.deck.push("wing"); } 
+      },
+      multiBeak: { 
+        name: "多嘴", 
+        desc: "獲得一張嘴", 
+        type: "common", 
+        effect: (character) => { character.deck.push("beak"); } 
+      },
+      multiClaw: { 
+        name: "多爪", 
+        desc: "獲得一張爪", 
+        type: "common", 
+        effect: (character) => { character.deck.push("claw"); } 
+      },
+      timid: { 
+        name: "膽小", 
+        desc: "獲得一張跳", 
+        type: "common", 
+        effect: (character) => { character.deck.push("dodge"); } 
+      },
+      tank: { 
+        name: "肉盾", 
+        desc: "獲得一張擋", 
+        type: "common", 
+        effect: (character) => { character.deck.push("block"); } 
+      },
+      lazy: { 
+        name: "懶散", 
+        desc: "獲得一張憩", 
+        type: "common", 
+        effect: (character) => { character.deck.push("rest"); } 
+      },
+      bragger: { 
+        name: "吹牛", 
+        desc: "獲得一張絕", 
+        type: "common", 
+        effect: (character) => { character.deck.push("ultimate"); } 
+      },
+      spacedOut: { 
+        name: "放空", 
+        desc: "隨機增加力量、敏捷、集中、直覺之一", 
+        type: "common", 
+        effect: (character) => {
+          const stats = ["strength", "agility", "focus", "intuition"];
+          const stat = stats[Math.floor(Math.random() * stats.length)];
+          character.stats[stat]++;
+        } 
+      },
+      explosiveWing: { 
+        name: "炸翅", 
+        desc: "力量+1，獲得一張翅", 
+        type: "exclusive", 
+        effect: (character) => { character.stats.strength++; character.deck.push("wing"); } 
+      },
+      sharpBeak: { 
+        name: "尖嘴", 
+        desc: "集中+1，獲得一張嘴", 
+        type: "exclusive", 
+        effect: (character) => { character.stats.focus++; character.deck.push("beak"); } 
+      },
+      frozenClaw: { 
+        name: "凍爪", 
+        desc: "敏捷+1，獲得一張爪", 
+        type: "exclusive", 
+        effect: (character) => { character.stats.agility++; character.deck.push("claw"); } 
+      },
+      oilyBelly: { 
+        name: "油肚", 
+        desc: "生命+10，獲得一張憩", 
+        type: "exclusive", 
+        effect: (character) => { character.maxHp += 10; character.hp += 10; character.deck.push("rest"); } 
+      },
+      dreamer: { 
+        name: "作夢", 
+        desc: "直覺+1，獲得一張絕", 
+        type: "exclusive", 
+        effect: (character) => { character.stats.intuition++; character.deck.push("ultimate"); } 
+      },
+      arrogant: { 
+        name: "自大", 
+        desc: "絕招點+1（含上限），額外抽取一個絕招", 
+        type: "exclusive", 
+        effect: (character) => {
+          character.ultimatePoints = Math.min(character.ultimatePointsCap + 1, character.ultimatePoints + 1);
+          character.ultimatePointsCap++;
+          if (!character.arrogantApplied) {
+            const possibleUltimates = Object.keys(ultimates).filter(ult => canFormUltimate(character.deck, ultimates[ult].combo) && !character.ultimates.includes(ult));
+            if (possibleUltimates.length > 0) {
+              const extraUlt = possibleUltimates[Math.floor(Math.random() * possibleUltimates.length)];
+              character.ultimates.push(extraUlt);
+              character.arrogantApplied = true;
+            }
+          }
+        } 
+      },
+      rookie: { 
+        name: "菜雞", 
+        desc: "隨機增加力量、敏捷、集中、直覺之二", 
+        type: "exclusive", 
+        effect: (character) => {
+          const stats = ["strength", "agility", "focus", "intuition"].sort(() => Math.random() - 0.5);
+          character.stats[stats[0]]++;
+          character.stats[stats[1]]++;
+        } 
+      }
+    };
+    const characters = {
+      "豆豆鴿": "explosiveWing",
+      "戳戳雀": "sharpBeak",
+      "抓抓鶴": "frozenClaw",
+      "油油鳥": "oilyBelly",
+      "科科梟": "dreamer",
+      "咕咕鷹": "arrogant",
+      "菜菜雞": "rookie"
+    };
+    const ultimates = {
+      tripleWing: { name: "連環拍打", combo: ["wing", "wing", "wing"], desc: "中量拍打傷害，依力量增傷，對手下回合昏迷", damage: 15, stat: "strength", effect: "stun" },
+      tripleClaw: { name: "神爪猛擊", combo: ["claw", "claw", "claw"], desc: "中量斬切傷害，依敏捷增傷，二連擊，第二下無視防禦/迴避", damage: 12, stat: "agility", hits: 2 },
+      tripleBeak: { name: "電光一啄", combo: ["beak", "beak", "beak"], desc: "大量穿刺傷害，依集中增傷，迴避機率減半", damage: 20, stat: "focus", dodgeMod: 0.5 },
+      mixedAttack: { name: "全面攻擊", combo: ["wing", "claw", "beak"], desc: "三連擊，無視防禦/迴避，每擊4+0.5*(力量+敏捷+集中)傷害", damage: 4, hits: 3 },
+      wingBlock: { name: "攻防一體", combo: ["wing", "block", "block"], desc: "中量拍打傷害，依力量增傷，同時有擋效果", damage: 10, stat: "strength", effect: "block" },
+      clawDodge: { name: "天翔鳥閃", combo: ["claw", "dodge", "dodge"], desc: "中量斬切傷害，依敏捷增傷，同時有跳效果", damage: 10, stat: "agility", effect: "dodge" },
+      beakRest: { name: "吃飽就好", combo: ["beak", "rest", "rest"], desc: "中量穿刺傷害，依集中增傷，成功傷害則恢復生命", damage: 10, stat: "focus", heal: 10 }
+    };
+    let player = {
+      name: "豆豆鴿",
+      hp: 80,
+      maxHp: 80,
+      ultimatePoints: 2,
+      ultimatePointsCap: 2,
+      stats: { strength: 3, agility: 3, focus: 3, intuition: 3 },
+      traits: [],
+      deck: ["claw", "claw", "claw", "beak", "beak", "beak", "wing", "wing", "wing", "block", "block", "dodge", "dodge"],
+      hand: [],
+      discard: [],
+      selectedCard: null,
+      selectedUltimate: null,
+      ultimates: [],
+      arrogantApplied: false
+    };
+    let enemy = {
+      name: "",
+      hp: 80,
+      maxHp: 80,
+      ultimatePoints: 2,
+      ultimatePointsCap: 2,
+      stats: { strength: 3, agility: 3, focus: 3, intuition: 3 },
+      traits: [],
+      deck: ["claw", "claw", "claw", "beak", "beak", "beak", "wing", "wing", "wing", "block", "block", "dodge", "dodge"],
+      hand: [],
+      discard: [],
+      selectedCard: null,
+      ultimates: [],
+      revealedUltimates: [],
+      arrogantApplied: false
+    };
+    let gameState = {
+      phase: "title",
+      selectionRound: 0,
+      selectedTraits: [],
+      enemySelectedTraits: [],
+      availableCharacters: [],
+      allCharacters: Object.keys(characters),
+      remainingCharacters: [],
+      defeatedEnemies: [],
+      enemyCharacter: null,
+      battleCount: 0,
+      enemyStunned: false,
+      playerStunned: false,
+      enemyStunnedNext: false,
+      playerStunnedNext: false
+    };
+    function resetPlayer() {
+      player = {
+        name: "豆豆鴿",
+        hp: 80,
+        maxHp: 80,
+        ultimatePoints: 2,
+        ultimatePointsCap: 2,
+        stats: { strength: 3, agility: 3, focus: 3, intuition: 3 },
+        traits: [],
+        deck: ["claw", "claw", "claw", "beak", "beak", "beak", "wing", "wing", "wing", "block", "block", "dodge", "dodge"],
+        hand: [],
+        discard: [],
+        selectedCard: null,
+        selectedUltimate: null,
+        ultimates: [],
+        arrogantApplied: false
+      };
+    }
+    function resetEnemy() {
+      enemy = {
+        name: "",
+        hp: 80,
+        maxHp: 80,
+        ultimatePoints: 2,
+        ultimatePointsCap: 2,
+        stats: { strength: 3, agility: 3, focus: 3, intuition: 3 },
+        traits: [],
+        deck: ["claw", "claw", "claw", "beak", "beak", "beak", "wing", "wing", "wing", "block", "block", "dodge", "dodge"],
+        hand: [],
+        discard: [],
+        selectedCard: null,
+        ultimates: [],
+        revealedUltimates: [],
+        arrogantApplied: false
+      };
+    }
+    function startGame() {
+      resetPlayer();
+      resetEnemy();
+      gameState = {
+        phase: "title",
+        selectionRound: 0,
+        selectedTraits: [],
+        enemySelectedTraits: [],
+        availableCharacters: [],
+        allCharacters: Object.keys(characters),
+        remainingCharacters: [],
+        defeatedEnemies: [],
+        enemyCharacter: null,
+        battleCount: 0,
+        enemyStunned: false,
+        playerStunned: false,
+        enemyStunnedNext: false,
+        playerStunnedNext: false
+      };
+      $("#play-card").prop("disabled", true);
+      $("#battle-counter").text(`第 ${gameState.battleCount + 1} 戰`);
+      $("#title-screen").fadeOut(1000, () => {
+        $("#game-screen").removeClass("hidden");
+        $("#trait-selection").removeClass("hidden");
+        $("#battle-screen").addClass("hidden");
+        $("#game-over").addClass("hidden");
+        $("#victory-screen").addClass("hidden");
+        $("#next-battle").addClass("hidden");
+        $("#restart").removeClass("hidden");
+        $("#battle-log").empty();
+        generateEnemy();
+        startCharacterSelection();
+      });
+    }
+    function generateEnemy() {
+      if (gameState.battleCount === 0) {
+        gameState.availableCharacters = gameState.allCharacters.sort(() => Math.random() - 0.5).slice(0, 3);
+        gameState.remainingCharacters = gameState.allCharacters.filter(c => !gameState.availableCharacters.includes(c));
+      }
+      const enemyCharacter = gameState.remainingCharacters.splice(Math.floor(Math.random() * gameState.remainingCharacters.length), 1)[0];
+      gameState.enemyCharacter = enemyCharacter;
+      enemy.name = enemyCharacter;
+      enemy.traits = [characters[enemyCharacter]];
+      gameState.enemySelectedTraits = [characters[enemyCharacter]];
+      traits[characters[enemyCharacter]].effect(enemy);
+      $("#battle-log").append(`<br>敵人獲得專屬特性：${traits[characters[enemyCharacter]].name}！`);
+      if (gameState.battleCount >= 1) {
+        enemy.maxHp += 10 * gameState.battleCount;
+        enemy.hp = enemy.maxHp;
+        enemy.ultimatePoints = enemy.ultimatePointsCap;
+        const statBoost = Math.floor(gameState.battleCount / 2);
+        enemy.stats.strength += statBoost;
+        enemy.stats.agility += statBoost;
+        enemy.stats.focus += statBoost;
+        enemy.stats.intuition += statBoost;
+      }
+      enemy.ultimates = [];
+      const possibleUltimates = Object.keys(ultimates).filter(ult => canFormUltimate(enemy.deck, ultimates[ult].combo));
+      const ultimateCount = gameState.battleCount === 0 ? 1 : gameState.battleCount === 1 ? 2 : 3;
+      const availableUltimates = possibleUltimates.sort(() => Math.random() - 0.5);
+      for (let i = 0; i < Math.min(ultimateCount, availableUltimates.length); i++) {
+        enemy.ultimates.push(availableUltimates[i]);
+      }
+      if (gameState.enemySelectedTraits.includes("arrogant") && !enemy.arrogantApplied && possibleUltimates.length > enemy.ultimates.length) {
+        const extraUlt = possibleUltimates.find(ult => !enemy.ultimates.includes(ult));
+        if (extraUlt) {
+          enemy.ultimates.push(extraUlt);
+          enemy.arrogantApplied = true;
+        }
+      }
+      $("#battle-counter").text(`第 ${gameState.battleCount + 1} 戰`);
+      $("#enemy-name").text(enemy.name);
+      updateEnemyStats();
+      updateEnemyUltimates();
+    }
+    function assignEnemyCommonTraits() {
+      let availableCommonTraits = Object.keys(traits).filter(t => traits[t].type === "common").sort(() => Math.random() - 0.5);
+      let traitCount = gameState.battleCount === 0 ? 1 : gameState.battleCount === 1 ? 2 : 3;
+      if (gameState.battleCount === 2) {
+        let availableExclusiveTraits = Object.keys(traits).filter(t => traits[t].type === "exclusive" && !gameState.enemySelectedTraits.includes(t)).sort(() => Math.random() - 0.5);
+        if (availableExclusiveTraits.length > 0) {
+          const exclusiveTrait = availableExclusiveTraits[0];
+          enemy.traits.push(exclusiveTrait);
+          gameState.enemySelectedTraits.push(exclusiveTrait);
+          traits[exclusiveTrait].effect(enemy);
+          $("#battle-log").append(`<br>敵人獲得專屬特性：${traits[exclusiveTrait].name}！`);
+        }
+      }
+      for (let i = 0; i < traitCount; i++) {
+        if (availableCommonTraits.length === 0) break;
+        const enemyTrait = availableCommonTraits.shift();
+        enemy.traits.push(enemyTrait);
+        gameState.enemySelectedTraits.push(enemyTrait);
+        traits[enemyTrait].effect(enemy);
+        $("#battle-log").append(`<br>敵人獲得特性：${traits[enemyTrait].name} - ${traits[enemyTrait].desc}！`);
+      }
+      updateEnemyStats();
+    }
+    function startCharacterSelection() {
+      gameState.phase = "characterSelection";
+      gameState.selectionRound = 1;
+      $("#selection-title").text(`選擇一個角色`);
+      $("#play-card").prop("disabled", true);
+      const options = gameState.availableCharacters;
+      $("#trait-options").empty();
+      options.forEach(character => {
+        const trait = characters[character];
+        const charElement = $(`
+          <div class="trait bg-white p-4 rounded shadow cursor-pointer hover:bg-gray-100" data-character="${character}">
+            ${character}
+          </div>
+        `);
+        charElement.click(() => {
+          $(".trait").removeClass("border-4 border-blue-500");
+          charElement.addClass("border-4 border-blue-500");
+          selectCharacter(character);
+        });
+        charElement.hover(
+          () => $("#info-bar").text(`獲得專屬特性：${traits[trait].name} - ${traits[trait].desc}`),
+          () => $("#info-bar").text("")
+        );
+        $("#trait-options").append(charElement);
+      });
+    }
+    function selectCharacter(character) {
+      resetPlayer();
+      player.name = character;
+      $("#player-name").text(player.name);
+      const trait = characters[character];
+      player.traits.push(trait);
+      gameState.selectedTraits.push(trait);
+      traits[trait].effect(player);
+      updatePlayerStats();
+      startTraitSelection();
+    }
+    function startTraitSelection() {
+      gameState.phase = "traitSelection";
+      gameState.selectionRound++;
+      $("#selection-title").text(gameState.battleCount === 0 ? `選擇一個特性` : `選擇一個特性`);
+      $("#play-card").prop("disabled", true);
+      const exclusiveChance = gameState.battleCount > 0 ? calculateCritChance(player.stats.intuition) : 0;
+      const options = generateTraitOptions(exclusiveChance);
+      $("#trait-options").empty();
+      options.forEach(trait => {
+        const traitElement = $(`
+          <div class="trait bg-white p-4 rounded shadow cursor-pointer hover:bg-gray-100" data-trait="${trait}">
+            ${traits[trait].name}
+          </div>
+        `);
+        traitElement.click(() => {
+          $(".trait").removeClass("border-4 border-blue-500");
+          traitElement.addClass("border-4 border-blue-500");
+          selectTrait(trait);
+        });
+        traitElement.hover(
+          () => $("#info-bar").text(traits[trait].desc),
+          () => $("#info-bar").text("")
+        );
+        $("#trait-options").append(traitElement);
+      });
+    }
+    function generateTraitOptions(exclusiveChance = 0) {
+      let availableTraits = Object.keys(traits).filter(t => 
+        (traits[t].type === "common" || (traits[t].type === "exclusive" && Math.random() < exclusiveChance)) && 
+        !gameState.selectedTraits.includes(t)
+      ).sort(() => Math.random() - 0.5);
+      return availableTraits.slice(0, 3);
+    }
+    function selectTrait(trait) {
+      player.traits.push(trait);
+      gameState.selectedTraits.push(trait);
+      traits[trait].effect(player);
+      $("#battle-log").append(`<br>玩家獲得特性：${traits[trait].name} - ${traits[trait].desc}！`);
+      updatePlayerStats();
+      $("#trait-selection").addClass("hidden");
+      assignEnemyCommonTraits();
+      if (gameState.battleCount === 0) {
+        assignUltimates();
+        startBattle();
+      } else {
+        assignPlayerUltimate();
+        startBattle();
+      }
+    }
+    function assignUltimates() {
+      let possibleUltimates = Object.keys(ultimates).filter(ult => canFormUltimate(player.deck, ultimates[ult].combo));
+      player.ultimates = possibleUltimates.length > 0 ? [possibleUltimates[Math.floor(Math.random() * possibleUltimates.length)]] : [];
+      if (gameState.selectedTraits.includes("arrogant") && !player.arrogantApplied && possibleUltimates.length > player.ultimates.length) {
+        const extraUlt = possibleUltimates.find(ult => !player.ultimates.includes(ult));
+        if (extraUlt) {
+          player.ultimates.push(extraUlt);
+          player.arrogantApplied = true;
+        }
+      }
+      $("#player-ultimates").html(player.ultimates.map(ult => {
+        const comboNames = ultimates[ult].combo.map(card => cards[card].name).join("");
+        return `<span class="cursor-pointer" data-ult="${ult}">${ultimates[ult].name} (${comboNames})</span>`;
+      }).join(", "));
+      $("#player-ultimates span").hover(
+        function() { $("#info-bar").text(ultimates[$(this).data("ult")].desc); },
+        () => $("#info-bar").text("")
+      );
+      updateEnemyUltimates();
+    }
+    function assignPlayerUltimate() {
+      let possibleUltimates = Object.keys(ultimates).filter(ult => canFormUltimate(player.deck, ultimates[ult].combo) && !player.ultimates.includes(ult));
+      if (possibleUltimates.length === 0) {
+        possibleUltimates = Object.keys(ultimates).filter(ult => !player.ultimates.includes(ult));
+        if (possibleUltimates.length > 0) {
+          const newUlt = possibleUltimates[Math.floor(Math.random() * possibleUltimates.length)];
+          const combo = ultimates[newUlt].combo;
+          combo.forEach(card => {
+            if (!player.deck.includes(card) && card !== "ultimate") {
+              player.deck.push(card);
+              $("#battle-log").append(`<br>因無合適絕招，自動為玩家添加一張${cards[card].name}到牌堆！`);
+            }
+          });
+          player.ultimates.push(newUlt);
+          $("#battle-log").append(`<br>玩家獲得新絕招：${ultimates[newUlt].name}！`);
+        } else {
+          $("#battle-log").append(`<br>無可用新絕招可分配！`);
+        }
+      } else {
+        const newUlt = possibleUltimates[Math.floor(Math.random() * possibleUltimates.length)];
+        player.ultimates.push(newUlt);
+        $("#battle-log").append(`<br>玩家獲得新絕招：${ultimates[newUlt].name}！`);
+      }
+      if (gameState.selectedTraits.includes("arrogant") && !player.arrogantApplied) {
+        possibleUltimates = Object.keys(ultimates).filter(ult => canFormUltimate(player.deck, ultimates[ult].combo) && !player.ultimates.includes(ult));
+        if (possibleUltimates.length > 0) {
+          const extraUlt = possibleUltimates[Math.floor(Math.random() * possibleUltimates.length)];
+          player.ultimates.push(extraUlt);
+          player.arrogantApplied = true;
+          $("#battle-log").append(`<br>因自大特性，玩家額外獲得絕招：${ultimates[extraUlt].name}！`);
+        }
+      }
+      $("#player-ultimates").html(player.ultimates.map(ult => {
+        const comboNames = ultimates[ult].combo.map(card => cards[card].name).join("");
+        return `<span class="cursor-pointer" data-ult="${ult}">${ultimates[ult].name} (${comboNames})</span>`;
+      }).join(", "));
+      $("#player-ultimates span").hover(
+        function() { $("#info-bar").text(ultimates[$(this).data("ult")].desc); },
+        () => $("#info-bar").text("")
+      );
+    }
+    function canFormUltimate(deck, combo) {
+      const deckCopy = [...deck];
+      const comboCopy = [...combo];
+      let ultimateCount = deckCopy.filter(card => card === "ultimate").length;
+      for (let card of comboCopy) {
+        if (deckCopy.includes(card)) {
+          deckCopy.splice(deckCopy.indexOf(card), 1);
+        } else if (ultimateCount > 0) {
+          ultimateCount--;
+          deckCopy.splice(deckCopy.indexOf("ultimate"), 1);
+        } else {
+          return false;
+        }
+      }
+      return true;
+    }
+    function getStatGrade(value) {
+      if (value <= 1) return "E";
+      if (value === 2) return "D";
+      if (value === 3) return "C";
+      if (value === 4) return "B";
+      if (value === 5) return "A";
+      if (value === 6) return "S";
+      return "X";
+    }
+    function updatePlayerStats() {
+      $("#player-hp").text(`${player.hp} / ${player.maxHp}`);
+      $("#player-hp-bar").css("width", `${(player.hp / player.maxHp) * 100}%`);
+      $("#player-ultimate-points").text("●".repeat(player.ultimatePoints) + "○".repeat(player.ultimatePointsCap - player.ultimatePoints));
+      $("#player-traits").html(player.traits.length > 0 ? player.traits.map(trait => 
+        `<span class="cursor-pointer" data-trait="${trait}">${traits[trait].name}</span>`
+      ).join(", ") : "");
+      $("#player-traits span").hover(
+        function() { $("#info-bar").text(traits[$(this).data("trait")].desc); },
+        () => $("#info-bar").text("")
+      );
+      $("#player-strength").text(getStatGrade(player.stats.strength));
+      $("#player-agility").text(getStatGrade(player.stats.agility));
+      $("#player-focus").text(getStatGrade(player.stats.focus));
+      $("#player-intuition").text(getStatGrade(player.stats.intuition));
+    }
+    function updateEnemyStats() {
+      $("#enemy-hp").text(`${enemy.hp} / ${enemy.maxHp}`);
+      $("#enemy-hp-bar").css("width", `${(enemy.hp / enemy.maxHp) * 100}%`);
+      $("#enemy-ultimate-points").text("●".repeat(enemy.ultimatePoints) + "○".repeat(enemy.ultimatePointsCap - enemy.ultimatePoints));
+      $("#enemy-traits").html(enemy.traits.length > 0 ? 
+        enemy.traits.map(trait => 
+          `<span class="cursor-pointer" data-trait="${trait}">${traits[trait].name}</span>`
+        ).join(", ") : "");
+      $("#enemy-traits span").hover(
+        function() { $("#info-bar").text(traits[$(this).data("trait")].desc); },
+        () => $("#info-bar").text("")
+      );
+      $("#enemy-strength").text(getStatGrade(enemy.stats.strength));
+      $("#enemy-agility").text(getStatGrade(enemy.stats.agility));
+      $("#enemy-focus").text(getStatGrade(enemy.stats.focus));
+      $("#enemy-intuition").text(getStatGrade(enemy.stats.intuition));
+    }
+    function updateEnemyUltimates() {
+      $("#enemy-ultimates").html(enemy.revealedUltimates.length > 0 ? 
+        enemy.revealedUltimates.map(ult => {
+          const comboNames = ultimates[ult].combo.map(card => cards[card].name).join("");
+          return `<span class="cursor-pointer" data-ult="${ult}">${ultimates[ult].name} (${comboNames})</span>`;
+        }).join(", ") : "????");
+      $("#enemy-ultimates span").hover(
+        function() { $("#info-bar").text(ultimates[$(this).data("ult")].desc); },
+        () => $("#info-bar").text("")
+      );
+    }
+    function startBattle() {
+      gameState.phase = "battle";
+      if (gameState.battleCount > 0) {
+        player.hp = player.maxHp;
+        player.ultimatePoints = player.ultimatePointsCap;
+        enemy.hp = enemy.maxHp;
+        enemy.ultimatePoints = enemy.ultimatePointsCap;
+      }
+      player.deck = [...player.deck, ...player.discard, ...player.hand].sort(() => Math.random() - 0.5);
+      player.discard = [];
+      player.hand = [];
+      enemy.deck = [...enemy.deck, ...enemy.discard, ...enemy.hand].sort(() => Math.random() - 0.5);
+      enemy.discard = [];
+      enemy.hand = [];
+      drawCards(player);
+      drawCards(enemy);
+      gameState.enemyStunned = gameState.enemyStunnedNext;
+      gameState.playerStunned = gameState.playerStunnedNext;
+      gameState.enemyStunnedNext = false;
+      gameState.playerStunnedNext = false;
+      $("#battle-screen").removeClass("hidden");
+      updatePlayerStats();
+      displayHand();
+    }
+    function drawCards(character) {
+      while (character.hand.length < 3) {
+        if (character.deck.length === 0 && character.discard.length > 0) {
+          character.deck = [...character.discard].sort(() => Math.random() - 0.5);
+          character.discard = [];
+          character.hp = Math.max(0, character.hp - 5);
+          const log = character === player ? "玩家牌堆耗盡，重新洗牌，受到 5 點疲勞傷害！" : "敵人牌堆耗盡，重新洗牌，受到 5 點疲勞傷害！";
+          $("#battle-log").html($("#battle-log").html() + ($("#battle-log").html() ? "<br>" : "") + log);
+          if (character === player) updatePlayerStats();
+          else updateEnemyStats();
+        } else if (character.deck.length === 0 && character.discard.length === 0) {
+          if (character === enemy) {
+            $("#battle-log").html("敵人牌堆設定錯誤，重新設定敵人並重啟戰鬥！");
+            resetEnemy();
+            gameState.remainingCharacters.push(gameState.enemyCharacter);
+            generateEnemy();
+            assignEnemyCommonTraits();
+            enemy.hp = enemy.maxHp;
+            enemy.ultimatePoints = enemy.ultimatePointsCap;
+            drawCards(enemy);
+            updateEnemyStats();
+            return;
+          } else {
+            $("#battle-log").html("玩家牌堆設定錯誤，遊戲無法繼續！");
+            gameState.phase = "gameOver";
+            return;
+          }
+        }
+        const index = Math.floor(Math.random() * character.deck.length);
+        character.hand.push(character.deck.splice(index, 1)[0]);
+      }
+    }
+    function displayHand() {
+      $("#player-hand").empty();
+      player.hand.forEach(card => {
+        const colorClass = {
+          wing: "bg-blue-100",
+          claw: "bg-red-100",
+          beak: "bg-yellow-100",
+          block: "bg-green-100",
+          dodge: "bg-purple-100",
+          ultimate: "bg-orange-100",
+          rest: "bg-gray-200"
+        }[card];
+        const cardElement = $(`
+          <div class="card ${colorClass} p-4 rounded shadow cursor-pointer hover:bg-opacity-80" data-card="${card}">
+            ${cards[card].name}
+          </div>
+        `);
+        cardElement.hover(
+          () => $("#info-bar").text(cards[card].desc),
+          () => $("#info-bar").text("")
+        );
+        cardElement.click(() => selectPlayerCard(card));
+        $("#player-hand").append(cardElement);
+      });
+      checkUltimate();
+    }
+    function selectPlayerCard(card) {
+      if (gameState.phase !== "battle") return;
+      player.selectedUltimate = null;
+      player.selectedCard = card;
+      $(".card").removeClass("bg-blue-200");
+      $(`[data-card="${card}"]`).addClass("bg-blue-200");
+      $("#play-card").text("出牌").removeClass("bg-blue-500").addClass("bg-blue-600").prop("disabled", false);
+      checkUltimate();
+    }
+    function checkUltimate() {
+      const hand = [...player.hand];
+      let canUseUltimate = false;
+      player.selectedUltimate = null;
+      if (player.ultimatePoints > 0) {
+        for (let ult of player.ultimates) {
+          const combo = [...ultimates[ult].combo];
+          const handCopy = [...hand];
+          let ultimateCount = handCopy.filter(card => card === "ultimate").length;
+          let valid = true;
+          for (let card of combo) {
+            if (handCopy.includes(card)) {
+              handCopy.splice(handCopy.indexOf(card), 1);
+            } else if (ultimateCount > 0) {
+              handCopy.splice(handCopy.indexOf("ultimate"), 1);
+              ultimateCount--;
+            } else {
+              valid = false;
+              break;
+            }
+          }
+          if (valid) {
+            canUseUltimate = true;
+            player.selectedUltimate = ult;
+            player.selectedCard = null;
+            $(".card").removeClass("bg-blue-200");
+            combo.forEach(card => {
+              if (hand.includes(card)) {
+                $(`[data-card="${card}"]`).addClass("bg-blue-200");
+              } else if (hand.includes("ultimate") && ultimateCount < hand.filter(c => c === "ultimate").length) {
+                $(`[data-card="ultimate"]`).addClass("bg-blue-200");
+                ultimateCount++;
+              }
+            });
+            $("#play-card").text(ultimates[ult].name).removeClass("bg-blue-500").addClass("bg-blue-600").prop("disabled", false);
+            break;
+          }
+        }
+      }
+      if (!canUseUltimate && !player.selectedCard) {
+        $("#play-card").prop("disabled", true);
+      }
+    }
+    function calculateCritChance(intuition) {
+      return 0.01 + 0.02 * (intuition * intuition) / 9;
+    }
+    function playTurn() {
+      if (!player.selectedCard && !player.selectedUltimate || gameState.phase !== "battle") {
+        $("#battle-log").html("無效行動：請在戰鬥階段選擇一張牌或絕招！");
+        return;
+      }
+      if (gameState.playerStunned) {
+        $("#battle-log").html("玩家昏迷，無法出牌！<br>敵人行動：無效果");
+        gameState.playerStunned = false;
+        player.selectedCard = null;
+        player.selectedUltimate = null;
+        $("#play-card").text("出牌").prop("disabled", true);
+        drawCards(player);
+        drawCards(enemy);
+        updatePlayerStats();
+        updateEnemyStats();
+        displayHand();
+        checkGameOver();
+        return;
+      }
+      let enemyAction = null;
+      if (!gameState.enemyStunned && enemy.hand.length > 0) {
+        if (enemy.ultimatePoints > 0 && Math.random() < 0.3) {
+          const validUltimates = enemy.ultimates.filter(i => canFormUltimate(enemy.hand, ultimates[i].combo));
+          if (validUltimates.length > 0) {
+            enemyAction = validUltimates[Math.floor(Math.random() * validUltimates.length)];
+          }
+        }
+        if (!enemyAction) {
+          const validCards = enemy.hand;
+          enemyAction = validCards[Math.floor(Math.random() * validCards.length)];
+        }
+      }
+      const playerResult = player.selectedUltimate ? resolvePlayerUltimate(player.selectedUltimate, enemyAction) : resolvePlayerCard(player.selectedCard, enemyAction);
+      const enemyResult = enemyAction ? (enemyAction in ultimates ? resolveEnemyUltimate(enemyAction, player.selectedUltimate || player.selectedCard) : resolveEnemyCard(enemyAction, player.selectedUltimate || player.selectedCard)) : "敵人無牌可出，無行動！";
+      $("#battle-log").html(`${playerResult}<br>${enemyResult}`);
+      if (player.selectedUltimate) {
+        const combo = ultimates[player.selectedUltimate].combo;
+        let ultimateCount = player.hand.filter(card => card === "ultimate").length;
+        combo.forEach(card => {
+          if (player.hand.includes(card)) {
+            player.discard.push(card);
+            player.hand.splice(player.hand.indexOf(card), 1);
+          } else if (ultimateCount > 0) {
+            player.discard.push("ultimate");
+            player.hand.splice(player.hand.indexOf("ultimate"), 1);
+            ultimateCount--;
+          }
+        });
+        player.ultimatePoints--;
+      } else {
+        player.discard.push(player.selectedCard);
+        player.hand.splice(player.hand.indexOf(player.selectedCard), 1);
+      }
+      if (enemyAction) {
+        if (enemyAction in ultimates) {
+          const combo = ultimates[enemyAction].combo;
+          let ultimateCount = enemy.hand.filter(card => card === "ultimate").length;
+          combo.forEach(card => {
+            if (enemy.hand.includes(card)) {
+              enemy.discard.push(card);
+              enemy.hand.splice(enemy.hand.indexOf(card), 1);
+            } else if (ultimateCount > 0) {
+              enemy.discard.push("ultimate");
+              enemy.hand.splice(enemy.hand.indexOf("ultimate"), 1);
+              ultimateCount--;
+            }
+          });
+          enemy.ultimatePoints--;
+          if (!enemy.revealedUltimates.includes(enemyAction)) {
+            enemy.revealedUltimates.push(enemyAction);
+            updateEnemyUltimates();
+          }
+        } else {
+          enemy.discard.push(enemyAction);
+          enemy.hand.splice(enemy.hand.indexOf(enemyAction), 1);
+        }
+      }
+      player.selectedCard = null;
+      player.selectedUltimate = null;
+      $("#play-card").text("出牌").prop("disabled", true);
+      drawCards(player);
+      drawCards(enemy);
+      updatePlayerStats();
+      updateEnemyStats();
+      displayHand();
+      checkGameOver();
+    }
+    function resolvePlayerCard(playerCard, enemyAction) {
+      let result = `玩家使用${cards[playerCard].name}`;
+      let playerDamage = 0;
+      if (playerCard === "wing") {
+        playerDamage = cards.wing.damage + player.stats.strength * cards.wing.multiplier;
+        if (Math.random() < calculateCritChance(player.stats.intuition)) {
+          playerDamage *= 2;
+          result += "：觸發爆擊！";
+        }
+      } else if (playerCard === "claw") {
+        playerDamage = cards.claw.damage + player.stats.agility * cards.claw.multiplier;
+        if (Math.random() < calculateCritChance(player.stats.intuition)) {
+          playerDamage *= 2;
+          result += "：觸發爆擊！";
+        }
+      } else if (playerCard === "beak") {
+        playerDamage = cards.beak.damage + player.stats.focus * cards.beak.multiplier;
+        if (Math.random() < calculateCritChance(player.stats.intuition)) {
+          playerDamage *= 2;
+          result += "：觸發爆擊！";
+        }
+      } else if (playerCard === "rest") {
+        const healAmount = (!enemyAction || !["wing", "claw", "beak"].includes(enemyAction) && !(enemyAction in ultimates)) ? cards.rest.heal * 2 : cards.rest.heal;
+        player.hp = Math.min(player.maxHp, player.hp + healAmount);
+        result += healAmount === cards.rest.heal * 2 ? `：充分休息，恢復 ${healAmount} 點生命！` : `：恢復 ${healAmount} 點生命！`;
+      } else if (playerCard === "ultimate") {
+        player.ultimatePoints = Math.min(player.ultimatePointsCap, player.ultimatePoints + 1);
+        result += "：恢復1點絕招點！";
+      } else if (playerCard === "block" || playerCard === "dodge") {
+        return result;
+      }
+      if (enemyAction in ultimates) {
+        const ult = ultimates[enemyAction];
+        if (playerCard === "dodge" && ult.name === "電光一啄") {
+          const dodgeChance = (cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1) * ult.dodgeMod;
+          if (Math.random() < dodgeChance) return result;
+        } else if (playerCard === "dodge" && !["神爪猛擊", "天翔鳥閃", "全面攻擊"].includes(ult.name)) {
+          const dodgeChance = cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) return result;
+        }
+        if (playerCard === "block" && !["電光一啄", "吃飽就好", "全面攻擊"].includes(ult.name)) {
+          return result;
+        }
+      } else if (enemyAction) {
+        if (playerCard === "dodge" && enemyAction !== "claw") {
+          const dodgeChance = cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) return result;
+        }
+        if (playerCard === "block" && enemyAction !== "beak") {
+          return result;
+        }
+      }
+      if (playerDamage > 0) {
+        if (enemyAction === "block" && playerCard !== "beak") {
+          result += "：被防禦，無傷害！";
+        } else if (enemyAction === "dodge" && playerCard !== "claw") {
+          const dodgeChance = cards.dodge.baseDodge + (enemy.stats.intuition - player.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) {
+            result += "：被迴避，無傷害！";
+          } else {
+            enemy.hp = Math.max(0, enemy.hp - playerDamage);
+            result += `：精準命中，造成 ${playerDamage} 點傷害！`;
+          }
+        } else if (playerCard === "beak" && enemyAction === "block") {
+          enemy.hp = Math.max(0, enemy.hp - playerDamage);
+          result += `：破開防禦，造成 ${playerDamage} 點傷害！`;
+        } else {
+          enemy.hp = Math.max(0, enemy.hp - playerDamage);
+          result += `：造成 ${playerDamage} 點傷害！`;
+        }
+      }
+      return result;
+    }
+    function resolveEnemyCard(enemyCard, playerAction) {
+      if (gameState.enemyStunned) {
+        gameState.enemyStunned = false;
+        return "敵人昏迷，無法出牌！";
+      }
+      let result = `敵人使用${cards[enemyCard].name}`;
+      let enemyDamage = 0;
+      if (enemyCard === "wing") {
+        enemyDamage = cards.wing.damage + enemy.stats.strength * cards.wing.multiplier;
+        if (Math.random() < calculateCritChance(enemy.stats.intuition)) {
+          enemyDamage *= 2;
+          result += "：觸發爆擊！";
+        }
+      } else if (enemyCard === "claw") {
+        enemyDamage = cards.claw.damage + enemy.stats.agility * cards.claw.multiplier;
+        if (Math.random() < calculateCritChance(enemy.stats.intuition)) {
+          enemyDamage *= 2;
+          result += "：觸發爆擊！";
+        }
+      } else if (enemyCard === "beak") {
+        enemyDamage = cards.beak.damage + enemy.stats.focus * cards.beak.multiplier;
+        if (Math.random() < calculateCritChance(enemy.stats.intuition)) {
+          enemyDamage *= 2;
+          result += "：觸發爆擊！";
+        }
+      } else if (enemyCard === "rest") {
+        const healAmount = (!playerAction || !["wing", "claw", "beak"].includes(playerAction) && !(playerAction in ultimates)) ? cards.rest.heal * 2 : cards.rest.heal;
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + healAmount);
+        result += healAmount === cards.rest.heal * 2 ? `：充分休息，恢復 ${healAmount} 點生命！` : `：恢復 ${healAmount} 點生命！`;
+      } else if (enemyCard === "ultimate") {
+        enemy.ultimatePoints = Math.min(enemy.ultimatePointsCap, enemy.ultimatePoints + 1);
+        result += "：恢復1點絕招點！";
+      } else if (enemyCard === "block" || enemyCard === "dodge") {
+        return result;
+      }
+      if (playerAction in ultimates) {
+        const ult = ultimates[playerAction];
+        if (enemyCard === "dodge" && !["神爪猛擊", "天翔鳥閃", "全面攻擊"].includes(ult.name)) {
+          const dodgeChance = cards.dodge.baseDodge + (enemy.stats.intuition - player.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) return result;
+        }
+        if (enemyCard === "block" && !["電光一啄", "吃飽就好", "全面攻擊"].includes(ult.name)) {
+          return result;
+        }
+      } else {
+        if (enemyCard === "dodge" && playerAction && playerAction !== "claw") {
+          const dodgeChance = cards.dodge.baseDodge + (enemy.stats.intuition - player.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) return result;
+        }
+        if (enemyCard === "block" && playerAction && playerAction !== "beak") {
+          return result;
+        }
+      }
+      if (enemyDamage > 0) {
+        if (playerAction === "block" && enemyCard !== "beak") {
+          result += "：被防禦，無傷害！";
+        } else if (playerAction === "dodge" && enemyCard !== "claw") {
+          const dodgeChance = cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) {
+            result += "：被迴避，無傷害！";
+          } else {
+            player.hp = Math.max(0, player.hp - enemyDamage);
+            result += `：精準命中，造成 ${enemyDamage} 點傷害！`;
+          }
+        } else if (enemyCard === "beak" && playerAction === "block") {
+          player.hp = Math.max(0, player.hp - enemyDamage);
+          result += `：破開防禦，造成 ${enemyDamage} 點傷害！`;
+        } else {
+          player.hp = Math.max(0, player.hp - enemyDamage);
+          result += `：造成 ${enemyDamage} 點傷害！`;
+        }
+      }
+      return result;
+    }
+    function resolvePlayerUltimate(playerUlt, enemyAction) {
+      if (!playerUlt || !ultimates[playerUlt]) {
+        return "玩家無效絕招，無行動！";
+      }
+      let result = `玩家使用${ultimates[playerUlt].name}：`;
+      let playerDamage = 0;
+      const ult = ultimates[playerUlt];
+      if (ult.name === "連環拍打") {
+        playerDamage = ult.damage + player.stats.strength;
+        if (!(enemyAction in ultimates) && enemyAction !== "block") {
+          gameState.enemyStunnedNext = true;
+          result += "敵人下回合昏迷！";
+        }
+      } else if (ult.name === "神爪猛擊") {
+        playerDamage = ult.damage + player.stats.agility;
+        if (!(enemyAction in ultimates) && !["block", "dodge"].includes(enemyAction)) {
+          playerDamage += ult.damage;
+        }
+      } else if (ult.name === "電光一啄") {
+        playerDamage = ult.damage + player.stats.focus;
+        if (!(enemyAction in ultimates) && enemyAction === "dodge") {
+          const dodgeChance = (cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1) * ult.dodgeMod;
+          if (Math.random() >= dodgeChance) {
+            playerDamage = ult.damage + player.stats.focus;
+          } else {
+            return result + "被迴避，無傷害！";
+          }
+        }
+      } else if (ult.name === "全面攻擊") {
+        const hitDamage = ult.damage + Math.floor(0.5 * player.stats.strength + 0.5 * player.stats.agility + 0.5 * player.stats.focus);
+        playerDamage = hitDamage * ult.hits;
+      } else if (ult.name === "攻防一體") {
+        playerDamage = ult.damage + player.stats.strength;
+        if (!(enemyAction in ultimates) && enemyAction !== "beak") {
+          // Block effect
+        }
+      } else if (ult.name === "天翔鳥閃") {
+        playerDamage = ult.damage + player.stats.agility;
+        if (!(enemyAction in ultimates) && enemyAction !== "claw") {
+          const dodgeChance = cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) {
+            // Dodge effect
+          }
+        }
+      } else if (ult.name === "吃飽就好") {
+        playerDamage = ult.damage + player.stats.focus;
+        if (playerDamage > 0 && (!(enemyAction in ultimates) && enemyAction !== "block")) {
+          player.hp = Math.min(player.maxHp, player.hp + ult.heal);
+          result += "恢復生命！";
+        }
+      }
+      if (playerDamage > 0) {
+        if (enemyAction === "block" && !["電光一啄", "吃飽就好", "全面攻擊"].includes(ult.name)) {
+          result += "被防禦，無傷害！";
+        } else if (enemyAction === "dodge" && !["神爪猛擊", "天翔鳥閃", "全面攻擊"].includes(ult.name)) {
+          const dodgeChance = ult.name === "電光一啄" ? 
+            (cards.dodge.baseDodge + (enemy.stats.intuition - player.stats.intuition) * 0.1) * ult.dodgeMod :
+            cards.dodge.baseDodge + (enemy.stats.intuition - player.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) {
+            result += "：被迴避，無傷害！";
+          } else {
+            enemy.hp = Math.max(0, enemy.hp - playerDamage);
+            result += `：精準命中，造成 ${playerDamage} 點傷害！`;
+          }
+        } else {
+          enemy.hp = Math.max(0, enemy.hp - playerDamage);
+          result += `：造成 ${playerDamage} 點傷害！`;
+        }
+      }
+      return result;
+    }
+    function resolveEnemyUltimate(enemyUlt, playerAction) {
+      if (!enemyUlt || !ultimates[enemyUlt]) {
+        return "敵人無效絕招，無行動！";
+      }
+      let result = `敵人使用${ultimates[enemyUlt].name}：`;
+      let enemyDamage = 0;
+      const ult = ultimates[enemyUlt];
+      if (gameState.enemyStunned) {
+        gameState.enemyStunned = false;
+        return "敵人昏迷，無法使用招式！";
+      }
+      if (ult.name === "連環拍打") {
+        enemyDamage = ult.damage + enemy.stats.strength;
+        if (!(playerAction in ultimates) && playerAction !== "block") {
+          gameState.playerStunnedNext = true;
+          result += "：玩家下回合昏迷！";
+        }
+      } else if (ult.name === "神爪猛擊") {
+        enemyDamage = ult.damage + enemy.stats.agility;
+        if (!(playerAction in ultimates) && !["block", "dodge"].includes(playerAction)) {
+          enemyDamage += ult.damage;
+        }
+      } else if (ult.name === "電光一啄") {
+        enemyDamage = ult.damage + enemy.stats.focus;
+        if (!(playerAction in ultimates) && playerAction === "dodge") {
+          const dodgeChance = (cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1) * ult.dodgeMod;
+          if (Math.random() >= dodgeChance) {
+            enemyDamage = ult.damage + enemy.stats.focus;
+          } else {
+            return result + "：被迴避，無傷害！";
+          }
+        }
+      } else if (ult.name === "全面攻擊") {
+        const hitDamage = ult.damage + Math.floor(0.5 * enemy.stats.strength + 0.5 * enemy.stats.agility + 0.5 * enemy.stats.focus);
+        enemyDamage = hitDamage * ult.hits;
+      } else if (ult.name === "攻防一體") {
+        enemyDamage = ult.damage + enemy.stats.strength;
+        if (!(playerAction in ultimates) && playerAction !== "beak") {
+          // Block effect
+        }
+      } else if (ult.name === "天翔鳥閃") {
+        enemyDamage = ult.damage + enemy.stats.agility;
+        if (!(playerAction in ultimates) && playerAction !== "claw") {
+          const dodgeChance = cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) {
+            // Dodge effect
+          }
+        }
+      } else if (ult.name === "吃飽就好") {
+        enemyDamage = ult.damage + enemy.stats.focus;
+        if (enemyDamage > 0 && (!(playerAction in ultimates) && playerAction !== "block")) {
+          enemy.hp = Math.min(enemy.maxHp, enemy.hp + ult.heal);
+          result += "恢復生命！";
+        }
+      }
+      if (enemyDamage > 0) {
+        if (playerAction === "block" && !["電光一啄", "吃飽就好", "全面攻擊"].includes(ult.name)) {
+          result += "被防禦，無傷害！";
+        } else if (playerAction === "dodge" && !["神爪猛擊", "天翔鳥閃", "全面攻擊"].includes(ult.name)) {
+          const dodgeChance = ult.name === "電光一啄" ? 
+            (cards.dodge.baseDodge + (player.stats.intuition - player.stats.intuition) * 0.1) * ult.dodgeMod :
+            cards.dodge.baseDodge + (player.stats.intuition - enemy.stats.intuition) * 0.1;
+          if (Math.random() < dodgeChance) {
+            result += "：被迴避，無傷害！";
+          } else {
+            player.hp = Math.max(0, player.hp - enemyDamage);
+            result += `：精準命中，造成 ${enemyDamage} 點傷害！`;
+          }
+        } else {
+          player.hp = Math.max(0, player.hp - enemyDamage);
+          result += `：造成 ${enemyDamage} 點傷害！`;
+        }
+      }
+      return result;
+    }
+    function checkGameOver() {
+      if (player.hp <= 0 && enemy.hp <= 0) {
+        $("#game-result").text("平局！");
+        $("#battle-screen").addClass("hidden");
+        $("#game-over").removeClass("hidden");
+        $("#next-battle").addClass("hidden");
+        $("#restart").removeClass("hidden");
+        gameState.phase = "gameOver";
+      } else if (player.hp <= 0) {
+        $("#game-result").text("你被擊敗了！");
+        $("#battle-screen").addClass("hidden");
+        $("#game-over").removeClass("hidden");
+        $("#next-battle").addClass("hidden");
+        $("#restart").removeClass("hidden");
+        gameState.phase = "gameOver";
+      } else if (enemy.hp <= 0) {
+        gameState.defeatedEnemies.push(gameState.enemyCharacter);
+        gameState.battleCount++;
+        player.deck = [...player.deck, ...player.discard, ...player.hand].sort(() => Math.random() - 0.5);
+        player.discard = [];
+        player.hand = [];
+        enemy.deck = [...enemy.deck, ...enemy.discard, ...enemy.hand].sort(() => Math.random() - 0.5);
+        enemy.discard = [];
+        enemy.hand = [];
+        $("#battle-screen").addClass("hidden");
+        $("#game-over").removeClass("hidden");
+        $("#game-result").text(`擊敗 ${enemy.name}！`);
+        if (gameState.battleCount >= 3) {
+          $("#game-over").addClass("hidden");
+          $("#victory-screen").removeClass("hidden");
+          $("#victory-message").text(`你擊敗了所有對手，成為菜雞之王！`);
+          gameState.phase = "victory";
+        } else {
+          $("#next-battle").removeClass("hidden");
+          $("#restart").removeClass("hidden");
+          gameState.phase = "gameOver";
+        }
+      }
+    }
+    $("#play-card").click(playTurn);
+    $("#next-battle").click(() => {
+      $("#game-over").addClass("hidden");
+      $("#battle-screen").addClass("hidden");
+      $("#trait-selection").removeClass("hidden");
+      resetEnemy();
+      generateEnemy();
+      startTraitSelection();
+    });
+    $("#restart, #restart-victory").click(() => {
+      startGame();
+    });
+    $(document).ready(() => {
+      $("#title-screen").click(startGame);
+    });
+  </script>
+</body>
+</html>

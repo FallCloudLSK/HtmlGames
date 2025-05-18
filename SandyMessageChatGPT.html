@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ready 與 Sandy 的訊息故事</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-image: linear-gradient(to bottom, #f0f4f8, #e0e7ef);
+    }
+    .chat-bubble {
+      max-width: 75%;
+      padding: 0.75rem 1rem;
+      border-radius: 1.5rem;
+      margin-bottom: 1.5rem;
+      word-wrap: break-word;
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      z-index: 0;
+    }
+    .chat-bubble::after {
+      content: attr(data-time);
+      position: relative;
+      display: block;
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 0.25rem;
+    }
+    .sandy {
+      background-color: #fce7f3;
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+    }
+    .ready {
+      background-color: #dbeafe;
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 0.25rem;
+      text-align: center;
+    }
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-grow: 1;
+      scroll-behavior: smooth;
+    }
+    #historyOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #historyPanel {
+      background: white;
+      max-height: 80vh;
+      width: 90%;
+      max-width: 500px;
+      overflow-y: auto;
+      padding: 1rem;
+      border-radius: 1rem;
+    }
+  </style>
+</head>
+<body class="p-4">
+  <div class="max-w-xl mx-auto bg-white p-4 rounded-xl shadow-md flex flex-col min-h-screen relative">
+    <button onclick="toggleHistory()" class="absolute top-2 right-4 text-sm text-blue-500">🕓 查看對話紀錄</button>
+    <div id="chat" class="chat-container space-y-2 mb-4"></div>
+    <div id="choices" class="flex flex-col space-y-2"></div>
+  </div>
+
+  <div id="historyOverlay" onclick="toggleHistory()">
+    <div id="historyPanel" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold mb-2">訊息回顧</h2>
+      <div id="historyContent" class="space-y-2 text-sm"></div>
+    </div>
+  </div>
+
+  <script>
+    const chatEl = document.getElementById('chat');
+    const choicesEl = document.getElementById('choices');
+    const historyOverlay = document.getElementById('historyOverlay');
+    const historyContent = document.getElementById('historyContent');
+
+    let state = {
+      trust: 0,
+      mood: 0,
+      dependency: 0,
+      scene: 'start',
+      history: []
+    };
+
+    const scenes = {
+      start: {
+        message: "Sandy：唉…又是一個亂七八糟的夜晚。",
+        choices: [
+          { text: "怎麼了？想聊聊嗎？", effect: { trust: 1 }, next: 'open_up' },
+          { text: "這次又是學長還是男友的事？", effect: { mood: -1 }, next: 'defensive' },
+          { text: "晚安，妳累了就早點休息。", effect: {}, next: 'cold' }
+        ]
+      },
+      open_up: {
+        message: "Sandy：學弟今天又傳訊息給我，我真的覺得很煩，但又不知道怎麼拒絕…",
+        choices: [
+          { text: "如果不想理他，就明講啊，妳不是一向很果斷？", effect: { mood: -1 }, next: 'challenged' },
+          { text: "妳是不是怕他受傷？", effect: { trust: 1, dependency: 1 }, next: 'soften' },
+          { text: "所以…妳其實對他還有點在意？", effect: { mood: -1 }, next: 'jealousy' }
+        ]
+      },
+      defensive: {
+        message: "Sandy：你也來酸我啊？原來你跟他們一樣。",
+        choices: [
+          { text: "我不是酸，我只是關心。", effect: { trust: 1 }, next: 'soften' },
+          { text: "…抱歉，我不該這樣問。", effect: { trust: 0 }, next: 'soften' }
+        ]
+      },
+      cold: {
+        message: "Sandy：嗯…好吧，那晚安。",
+        choices: []
+      },
+      challenged: {
+        message: "Sandy：你怎麼會這樣說，我哪有果斷…我根本什麼都搞不清楚。",
+        choices: [
+          { text: "那就別勉強自己，妳有權選擇對自己好的事。", effect: { trust: 1, dependency: 1 }, next: 'soften' }
+        ]
+      },
+      soften: {
+        message: "Sandy：你總是這樣…講話讓我有點安心。",
+        choices: [
+          { text: "那妳願意多讓我了解妳嗎？", effect: { trust: 1 }, next: 'bonding' },
+          { text: "只是我也擔心自己會不會只是其中一個。", effect: { mood: -1 }, next: 'defensive2' }
+        ]
+      },
+      jealousy: {
+        message: "Sandy：你是來審問我？你根本不懂我。",
+        choices: []
+      },
+      defensive2: {
+        message: "Sandy：……那你想怎樣？放棄嗎？",
+        choices: [
+          { text: "不，我想更了解真正的妳。", effect: { trust: 1 }, next: 'bonding' }
+        ]
+      },
+      bonding: {
+        message: "Sandy：……或許，我真的有點想靠近你看看。",
+        choices: [
+          { text: "我也一樣，我會好好陪著妳。", effect: { trust: 1, dependency: 1 }, next: 'secret_past' },
+          { text: "那妳準備好面對真正的感情了嗎？", effect: { trust: -1 }, next: 'ending_doubt' }
+        ]
+      },
+      secret_past: {
+        message: "Sandy：你知道嗎…我以前曾經也試著相信一個人，結果被當工具人利用，連我自己都開始懷疑自己有沒有價值…",
+        choices: [
+          { text: "我不會是那樣的人，妳可以慢慢觀察我。", effect: { trust: 1 }, next: 'trust_building' },
+          { text: "聽起來妳的傷真的很深…我會更小心對待妳。", effect: { dependency: 1 }, next: 'trust_building' }
+        ]
+      },
+      trust_building: {
+        message: "Sandy：……謝謝你。真的。如果你願意，我想再相信一次看看。",
+        choices: [
+          { text: "那我們就一起慢慢來，不急。", effect: { trust: 1, dependency: 1 }, next: 'ending_intimate' },
+          { text: "我不想只當個安慰角色，我希望我們是對等的。", effect: { mood: -1 }, next: 'ending_distance' }
+        ]
+      },
+      ending_intimate: {
+        message: "Sandy：我也希望我們是對等的。只是現在的我，需要有人願意陪我走一段。你願意嗎？……謝謝你。",
+        choices: []
+      },
+      ending_distance: {
+        message: "Sandy：或許我們想要的東西不太一樣吧…不過謝謝你曾經陪我說話。",
+        choices: []
+      },
+      ending_hope: {
+        message: "Sandy：嗯…謝謝你。我覺得，至少現在，我可以相信你。",
+        choices: []
+      },
+      ending_doubt: {
+        message: "Sandy：你太快了…我還沒準備好。對不起…",
+        choices: []
+      }
+    };
+
+    function getHint() {
+      const { trust, mood, dependency } = state;
+      if (trust >= 3 && dependency >= 2) return "她似乎開始依賴你，甚至有點期待你多陪她。";
+      if (mood < -2) return "Sandy的語氣似乎越來越冷淡。";
+      if (trust < 0) return "她可能對你的話有點不信任了。";
+      if (dependency >= 3) return "她好像有點太依賴你了，這真的健康嗎？";
+      return null;
+    }
+
+    function formatTime() {
+      const now = new Date();
+      return now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    }
+
+    function renderScene(key) {
+      const scene = scenes[key];
+      state.scene = key;
+      state.history.push(key);
+
+      const msg = document.createElement('div');
+      msg.className = 'chat-bubble sandy';
+      msg.textContent = scene.message;
+      msg.setAttribute('data-time', formatTime());
+      chatEl.appendChild(msg);
+
+      const hint = getHint();
+      if (hint) {
+        const hintEl = document.createElement('div');
+        hintEl.className = 'hint';
+        hintEl.textContent = '（系統提示）' + hint;
+        chatEl.appendChild(hintEl);
+      }
+
+      setTimeout(() => {
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }, 100);
+
+      choicesEl.innerHTML = '';
+
+      if (scene.choices.length === 0) {
+        const end = document.createElement('div');
+        end.className = 'text-center text-sm text-gray-500 mt-4';
+        end.textContent = '（故事已結束）';
+        choicesEl.appendChild(end);
+
+        const replay = document.createElement('button');
+        replay.className = 'mt-2 text-blue-500 underline';
+        replay.textContent = '重新開始';
+        replay.onclick = () => location.reload();
+        choicesEl.appendChild(replay);
+        return;
+      }
+
+      scene.choices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 text-left';
+        btn.textContent = choice.text;
+        btn.onclick = () => {
+          Object.entries(choice.effect).forEach(([key, val]) => {
+            state[key] += val;
+          });
+
+          const reply = document.createElement('div');
+          reply.className = 'chat-bubble ready';
+          reply.textContent = choice.text;
+          reply.setAttribute('data-time', formatTime());
+          chatEl.appendChild(reply);
+
+          renderScene(choice.next);
+        };
+        choicesEl.appendChild(btn);
+      });
+    }
+
+    function toggleHistory() {
+      historyOverlay.style.display = historyOverlay.style.display === 'flex' ? 'none' : 'flex';
+      if (historyOverlay.style.display === 'flex') {
+        historyContent.innerHTML = '';
+        state.history.forEach(key => {
+          const entry = document.createElement('div');
+          entry.textContent = scenes[key].message;
+          historyContent.appendChild(entry);
+        });
+      }
+    }
+
+    renderScene(state.scene);
+  </script>
+</body>
+</html>

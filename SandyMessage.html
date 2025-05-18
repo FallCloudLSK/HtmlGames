@@ -1,0 +1,599 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>學姊的訊息 - 劇情遊戲</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.20.15/babel.min.js"></script>
+  <style>
+    body {
+      background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    #root {
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+    }
+    .container {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #333;
+    }
+    .dialogue {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 16px;
+      color: #444;
+    }
+    .choice-button {
+      display: block !important;
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .choice-button:hover {
+      background-color: #0056b3;
+    }
+    .stats {
+      margin-top: 15px;
+      font-size: 12px;
+      color: #666;
+    }
+    .restart-button {
+      display: block !important;
+      width: 100%;
+      padding: 10px;
+      background-color: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      text-align: center;
+      cursor: pointer;
+      margin-top: 30px;
+    }
+    .restart-button:hover {
+      background-color: #218838;
+    }
+    .error-message {
+      color: red;
+      text-align: center;
+      font-size: 16px;
+      margin: 20px;
+    }
+    .memory-fragments {
+      margin-top: 15px;
+      font-size: 12px;
+      color: #555;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+    .memory-item {
+      margin: 5px 0;
+      font-style: italic;
+    }
+    .ending-id {
+      font-size: 12px;
+      color: #888;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // 錯誤邊界組件
+    class ErrorBoundary extends React.Component {
+      state = { hasError: false, error: null, errorInfo: null };
+
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+
+      componentDidCatch(error, errorInfo) {
+        console.error('ErrorBoundary 捕獲錯誤:', error, errorInfo);
+        this.setState({ errorInfo });
+      }
+
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="error-message">
+              <p>遊戲載入失敗：{this.state.error?.message || '未知錯誤'}</p>
+              <p>請檢查網路連線或刷新頁面。若問題持續，請查看控制台錯誤訊息。</p>
+              <button
+                className="restart-button"
+                onClick={() => window.location.reload()}
+              >
+                重新載入
+              </button>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    // 遊戲組件
+    const Game = () => {
+      const [scene, setScene] = useState(0);
+      const [trust, setTrust] = useState(50);
+      const [affection, setAffection] = useState(30);
+      const [stance, setStance] = useState('neutral');
+      const [history, setHistory] = useState([]);
+      const [gameEnded, setGameEnded] = useState(false);
+      const [ending, setEnding] = useState(null);
+      const [memories, setMemories] = useState([]);
+      const [keyChoices, setKeyChoices] = useState([]);
+
+      // Fisher-Yates 洗牌演算法
+      const shuffleArray = (array) => {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      };
+
+      // 關係提示
+      const getRelationshipHint = () => {
+        if (trust >= 80 && affection >= 80) {
+          return "Sandy 對你非常信任，語氣中透著親密和依賴。";
+        } else if (trust >= 60 && affection >= 60) {
+          return "Sandy 對你頗有好感，願意敞開心扉。";
+        } else if (trust <= 30 || affection <= 30) {
+          return "Sandy 對你的態度冷淡，似乎有些疏遠。";
+        } else {
+          return "Sandy 對你的態度還算友善，但保持著距離。";
+        }
+      };
+
+      // 監聽結局狀態
+      useEffect(() => {
+        if (gameEnded && ending) {
+          console.log('結局觸發:', ending, { scene, trust, affection, memories, keyChoices });
+        }
+      }, [gameEnded, ending, scene, trust, affection, memories, keyChoices]);
+
+      // 劇情節點數據
+      const scenes = [
+        {
+          id: 0,
+          text: "晚上11點，你的手機螢幕亮起，Sandy傳來訊息：『Ready，睡了沒？最近好煩，想跟你聊聊。』她的語氣似乎有些低落，你要怎麼回？",
+          choices: [
+            { text: "『沒睡！怎麼了，學姊心情不好？』", nextScene: 1, trust: 10, affection: 5, stance: 'supportive', memory: "Sandy 的低落語氣" },
+            { text: "『還沒睡，怎麼這麼晚找我？』", nextScene: 2, trust: 0, affection: 0, stance: 'neutral' },
+            { text: "『學姊，這麼晚有啥事？直接說吧。』", nextScene: 3, trust: -5, affection: -5, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 1,
+          text: "Sandy回：『唉，男友又跟別的女生出去，我氣到不行！他說只是朋友，但我就是不爽！』她似乎很激動，你要怎麼安撫她？",
+          choices: [
+            { text: "『學姊，別氣了，他不值得你這樣。想開點，還有我在呢！』", nextScene: 4, trust: 15, affection: 10, stance: 'supportive', memory: "Sandy 的嫉妒心" },
+            { text: "『這種事很常見吧，說不定真的只是朋友？』", nextScene: 5, trust: -10, affection: -5, stance: 'neutral' },
+            { text: "『你不是也有跟別人搞曖昧？這有啥好氣的？』", nextScene: 6, trust: -20, affection: -15, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 2,
+          text: "Sandy回：『沒事，就是睡不著，想找人聊聊。你最近過得怎樣？』她的語氣平淡，但似乎有點試探，你要怎麼回？",
+          choices: [
+            { text: "『我還好，學姊你呢？有啥心事說來聽聽吧！』", nextScene: 1, trust: 5, affection: 5, stance: 'supportive', memory: "Sandy 的試探" },
+            { text: "『還行吧，工作忙。你找我有啥目的？』", nextScene: 3, trust: -5, affection: 0, stance: 'neutral' },
+            { text: "『學姊，你不會又想找我當備胎吧？』", nextScene: 6, trust: -15, affection: -10, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 3,
+          text: "Sandy回：『你這什麼語氣啊？算了，沒心情跟你聊了。』她似乎有點不開心，過了一會又傳：『其實是我跟教授的事…他好像有別的對象。』你要怎麼回？",
+          choices: [
+            { text: "『學姊，別難過，說說看怎麼回事，我聽著呢。』", nextScene: 7, trust: 10, affection: 10, stance: 'supportive', memory: "Sandy 的脆弱" },
+            { text: "『教授？學姊你不是也有男友，怎麼回事？』", nextScene: 8, trust: -10, affection: -5, stance: 'neutral' },
+            { text: "『你跟教授也有關係？學姊你這生活也太亂了吧？』", nextScene: 9, trust: -25, affection: -20, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 4,
+          text: "Sandy回：『謝謝你，Ready，還是你最好…我真的好累，這些關係好亂。』她停頓了一下，又傳：『有時候我跟學弟…他付我3600塊，你懂的。』她似乎很掙扎，你要怎麼回？",
+          choices: [
+            { text: "『學姊，別這樣為難自己，你值得更好的！』", nextScene: 10, trust: 20, affection: 15, stance: 'supportive', memory: "Sandy 的掙扎", keyChoice: "support_sandy_value" },
+            { text: "『3600？這是什麼意思？說清楚點。』", nextScene: 11, trust: 0, affection: -5, stance: 'neutral' },
+            { text: "『你居然做這種事？學姊，我有點失望。』", nextScene: 12, trust: -30, affection: -25, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 5,
+          text: "Sandy回：『你也覺得我小題大作？算了，你不會懂的。』她似乎更沮喪了，過了一會傳：『我跟教授也有點問題…他好像把我當工具人。』你要怎麼回？",
+          choices: [
+            { text: "『學姊，別這樣想，說說看，我幫你分析。』", nextScene: 7, trust: 10, affection: 5, stance: 'supportive', memory: "Sandy 的沮喪" },
+            { text: "『教授？這是什麼情況？你自己不也亂來？』", nextScene: 8, trust: -15, affection: -10, stance: 'neutral' },
+            { text: "『你這是自找的吧？到處搞亂，還怪別人？』", nextScene: 9, trust: -30, affection: -25, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 6,
+          text: "Sandy回：『你什麼意思？我只是想跟你聊聊，你這樣說太過分了吧！』她很生氣，過了一會又傳：『算了，我跟你說實話，我跟學弟有過交易…3600塊一次。』你要怎麼回？",
+          choices: [
+            { text: "『學姊，我不是故意傷你，說說看怎麼回事？』", nextScene: 10, trust: 5, affection: 5, stance: 'supportive', memory: "Sandy 的憤怒" },
+            { text: "『3600塊？這是什麼交易？講清楚。』", nextScene: 11, trust: -10, affection: -10, stance: 'neutral' },
+            { text: "『你真的去做這種事？我沒想到你是這種人。』", nextScene: 12, trust: -40, affection: -30, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 7,
+          text: "Sandy回：『謝謝你願意聽…教授說他會幫我論文，但每次見面都…你懂的。我覺得自己好髒。』她語氣很低落，你要怎麼回？",
+          choices: [
+            { text: "『學姊，你不需要這樣委屈自己，我支持你離開這種關係！』", nextScene: 13, trust: 25, affection: 20, stance: 'supportive', memory: "Sandy 的自責", keyChoice: "encourage_independence" },
+            { text: "『這聽起來很複雜…你有沒有想過跟他談清楚？』", nextScene: 14, trust: 0, affection: 0, stance: 'neutral' },
+            { text: "『你明知道他這樣，還跟他繼續？』", nextScene: 15, trust: -20, affection: -15, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 8,
+          text: "Sandy回：『你這是什麼意思？我在跟你分享心事，你卻質問我？』她停頓了一下，又傳：『我跟學弟也有交易…3600塊，你懂的。』你要怎麼回？",
+          choices: [
+            { text: "『對不起，學姊，我只是想了解，說說看吧。』", nextScene: 10, trust: 5, affection: 5, stance: 'supportive', memory: "Sandy 的誤解" },
+            { text: "『3600塊是什麼意思？別賣關子了。』", nextScene: 11, trust: -10, affection: -10, stance: 'neutral' },
+            { text: "『你這是自願的吧？還怪別人利用你？』", nextScene: 12, trust: -35, affection: -30, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 9,
+          text: "Sandy回：『你憑什麼這樣說我？我以為你是朋友！』她非常生氣，直接把你封鎖了。",
+          choices: [],
+          ending: 'bad_ending_1'
+        },
+        {
+          id: 10,
+          text: "Sandy回：『你真的很懂我…我其實很後悔跟學弟做這種事，但當時缺錢，又覺得無所謂。』她似乎敞開心扉，你要怎麼回？",
+          choices: [
+            { text: "『學姊，過去的事別想了，我會一直在你身邊支持你。』", nextScene: 16, trust: 30, affection: 25, stance: 'supportive', memory: "Sandy 的悔意" },
+            { text: "『我明白，學姊，大家都有低谷，現在怎麼打算？』", nextScene: 17, trust: 10, affection: 5, stance: 'neutral' },
+            { text: "『你怎麼會淪落到這種地步？學姊，你得振作啊。』", nextScene: 18, trust: -15, affection: -10, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 11,
+          text: "Sandy回：『你非要我說清楚？好吧，就是…我跟他上床，每次他給我3600塊。』她語氣有些自暴自棄，你要怎麼回？",
+          choices: [
+            { text: "『學姊，我不怪你，說說看你怎麼想的？』", nextScene: 10, trust: 10, affection: 10, stance: 'supportive', memory: "Sandy 的自暴自棄" },
+            { text: "『這…你為什麼要做這種事？』", nextScene: 18, trust: -15, affection: -15, stance: 'neutral' },
+            { text: "『學姊，我真的沒想到你會這樣…』", nextScene: 12, trust: -30, affection: -25, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 12,
+          text: "Sandy回：『我以為你會懂我，沒想到你也這樣看我。』她不再回訊息，過了幾天，你聽說她跟男友分手，搬離了城市。",
+          choices: [],
+          ending: 'bad_ending_2'
+        },
+        {
+          id: 13,
+          text: "Sandy回：『你真的讓我覺得有希望…Ready，我想跟你見面，當面聊聊，可以嗎？』她語氣帶著一絲期待，你要怎麼回？",
+          choices: [
+            { text: "『當然可以！學姊，隨時找我，我都在。』", nextScene: 19, trust: 20, affection: 30, stance: 'supportive', memory: "Sandy 的希望", keyChoice: "meet_sandy" },
+            { text: "『見面？好吧，什麼時候方便？』", nextScene: 20, trust: 5, affection: 5, stance: 'neutral' },
+            { text: "『見面幹嘛？我們這樣聊不是挺好？』", nextScene: 21, trust: -10, affection: -15, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 14,
+          text: "Sandy回：『談清楚？他只把我當工具人，根本不會聽！』她語氣很沮喪，又傳：『我是不是活該這樣？』你要怎麼回？",
+          choices: [
+            { text: "『學姊，你絕對不該被這樣對待！我們一起想辦法。』", nextScene: 13, trust: 15, affection: 15, stance: 'supportive', memory: "Sandy 的無助" },
+            { text: "『或許你也可以試著改變自己吧？』", nextScene: 17, trust: 0, affection: -5, stance: 'neutral' },
+            { text: "『你自己也沒那麼無辜，學姊。』", nextScene: 18, trust: -20, affection: -20, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 15,
+          text: "Sandy回：『你這話什麼意思？我跟你說這些，你卻怪我？』她非常生氣，過了一會把你封鎖了。",
+          choices: [],
+          ending: 'bad_ending_1'
+        },
+        {
+          id: 16,
+          text: "Sandy回：『有你這句話，我真的好多了…Ready，我想試著改變，離開這些亂七八糟的關係，你會幫我嗎？』她語氣充滿希望，你要怎麼回？",
+          choices: [
+            { text: "『學姊，我會一直陪著你，但你得先為自己而活！』", nextScene: 22, trust: 25, affection: 30, stance: 'supportive', memory: "Sandy 的決心", keyChoice: "inspire_sandy" },
+            { text: "『當然，學姊，你有什麼計畫？』", nextScene: 20, trust: 10, affection: 10, stance: 'neutral' },
+            { text: "『這是你自己的事，我幫不上什麼。』", nextScene: 21, trust: -20, affection: -20, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 17,
+          text: "Sandy回：『我也不知道…我現在很亂，Ready，你覺得我該怎麼辦？』她似乎很迷茫，你要怎麼回？",
+          choices: [
+            { text: "『學姊，先冷靜下來，我們可以一起想想未來。』", nextScene: 13, trust: 15, affection: 10, stance: 'supportive', memory: "Sandy 的迷茫" },
+            { text: "『你得自己想清楚，學姊，我只能聽你說。』", nextScene: 20, trust: 0, affection: -5, stance: 'neutral' },
+            { text: "『你這是自找的，學姊，別指望我幫你收拾。』", nextScene: 12, trust: -25, affection: -25, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 18,
+          text: "Sandy回：『我跟你說這些，你卻這樣看我？算了，我不需要你同情。』她不再回訊息，過了幾天，你聽說她跟男友分手，搬離了城市。",
+          choices: [],
+          ending: 'bad_ending_2'
+        },
+        {
+          id: 19,
+          text: "你們約在咖啡廳見面，Sandy看起來比想像中憔悴，但對你微笑：『謝謝你，Ready，有你我真的好多了。』她說想結束所有複雜關係，但語氣有些猶豫。你要怎麼回？",
+          choices: [
+            { text: "『學姊，我喜歡你，但我希望你為自己而活，不是為了任何人。』", nextScene: 23, trust: 20, affection: 30, stance: 'supportive', memory: "Sandy 的微笑", keyChoice: "true_confession" },
+            { text: "『這是好事，學姊，我支持你！』", nextScene: 24, trust: 15, affection: 10, stance: 'neutral', memory: "Sandy 的努力" },
+            { text: "『真的能結束？學姊，你得證明給我看。』", nextScene: 25, trust: -10, affection: -15, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 20,
+          text: "Sandy回：『好吧…我再想想，謝謝你陪我聊。』她語氣平淡，之後你們的聯繫漸漸減少，生活回到原本的軌道。",
+          choices: [],
+          ending: 'neutral_ending'
+        },
+        {
+          id: 21,
+          text: "Sandy回：『好吧，我以為你會懂我，算了。』她不再回訊息，過了幾天，你聽說她跟男友分手，搬離了城市。",
+          choices: [],
+          ending: 'bad_ending_2'
+        },
+        {
+          id: 22,
+          text: "Sandy回：『你說得對…我應該為自己而活。Ready，我想跟你見面，當面謝謝你。』她語氣充滿決心，你要怎麼回？",
+          choices: [
+            { text: "『好！學姊，我隨時都在！』", nextScene: 19, trust: 20, affection: 25, stance: 'supportive', memory: "Sandy 的新開始" },
+            { text: "『見面？好吧，什麼時候？』", nextScene: 20, trust: 5, affection: 5, stance: 'neutral' },
+            { text: "『謝謝就免了，學姊，自己加油吧。』", nextScene: 21, trust: -15, affection: -20, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 23,
+          text: keyChoices.includes("support_sandy_value") && keyChoices.includes("encourage_independence") && keyChoices.includes("meet_sandy") && keyChoices.includes("true_confession")
+            ? "Sandy愣了一下，然後笑了：『Ready，你讓我相信自己可以改變…我也喜歡你。』你們開始了一段專一的戀情，她終於放下過去的複雜關係。"
+            : "Sandy微笑：『Ready，我也喜歡你…但我需要時間整理自己。』你們開始交往，但她偶爾仍與學弟保持交易關係，你成了她生命中的另一個角色。",
+          choices: [],
+          ending: keyChoices.includes("support_sandy_value") && keyChoices.includes("encourage_independence") && keyChoices.includes("meet_sandy") && keyChoices.includes("true_confession")
+            ? 'good_ending'
+            : 'fwb_ending'
+        },
+        {
+          id: 24,
+          text: "Sandy點點頭：『謝謝你，Ready，我會努力的。』你們成為了好朋友，她逐漸走出陰影，但你們的關係始終停留在友誼。",
+          choices: [],
+          ending: 'friend_ending'
+        },
+        {
+          id: 25,
+          text: "Sandy低頭沉默，然後說：『也許你說得對，但我需要時間。』之後你們的聯繫漸漸減少，她似乎選擇獨自面對。",
+          choices: [],
+          ending: 'neutral_ending'
+        },
+        {
+          id: 26,
+          text: "Sandy突然傳來訊息：『Ready，我心情很差…你願意陪我一晚嗎？就像我和學弟那樣，3600塊，我保證你會開心。』她的語氣帶著試探，你要怎麼回？",
+          choices: [
+            { text: "『學姊，你不需要這樣證明自己，我希望你尊重自己。』", nextScene: 13, trust: 20, affection: 15, stance: 'supportive', memory: "Sandy 的試探", keyChoice: "reject_fwb" },
+            { text: "『…好吧，學姊，我願意試試。』", nextScene: 27, trust: 10, affection: 20, stance: 'neutral', memory: "Sandy 的交易" },
+            { text: "『學姊，這太離譜了，我不能接受。』", nextScene: 12, trust: -30, affection: -25, stance: 'judgmental' }
+          ]
+        },
+        {
+          id: 27,
+          text: "你和Sandy度過了一晚，她給了你一個微笑，但眼神有些空洞：『謝謝你，Ready，這樣我感覺好多了。』之後，你們偶爾以3600塊的交易繼續見面，但她未改變過去的生活方式。",
+          choices: [],
+          ending: 'fwb_ending'
+        }
+      ];
+
+      // 結局描述
+      const endings = {
+        good_ending: "你和Sandy開始了一段專一的戀情。你堅定的支持和原則幫助她重新定義自我價值，你們一起迎接新的未來。",
+        friend_ending: "你和Sandy成為了親密的朋友。她在你的支持下逐漸走出複雜的過去，雖然沒有成為戀人，但你們的友誼堅不可摧。",
+        neutral_ending: "你和Sandy的聯繫逐漸減少。她選擇自己面對生活，你回到了原本的軌道，偶爾會想起她的訊息。",
+        bad_ending_1: "Sandy因為你的冷漠或指責徹底失望，將你封鎖。你後來聽說她離開了城市，沒再聯繫。",
+        bad_ending_2: "Sandy因為你的誤解或批評感到受傷，選擇離開。你聽說她與男友分手，搬到另一個城市，杳無音訊。",
+        fwb_ending: "你和Sandy建立了以3600元為基礎的關係。她偶爾找你，但她的生活方式未改變，你只是她生命中的另一個過客。"
+      };
+
+      // 處理選擇
+      const handleChoice = (choice) => {
+        console.log('選擇:', choice.text, { scene, trust, affection });
+        try {
+          setHistory([...history, { scene: scenes[scene], choice: choice.text }]);
+          setTrust((prev) => Math.max(0, Math.min(100, prev + choice.trust)));
+          setAffection((prev) => Math.max(0, Math.min(100, prev + choice.affection)));
+          setStance(choice.stance);
+          if (choice.memory) {
+            setMemories((prev) => [...prev, choice.memory]);
+          }
+          if (choice.keyChoice) {
+            setKeyChoices((prev) => [...prev, choice.keyChoice]);
+          }
+          if (trust >= 80 && affection >= 80 && Math.random() < 0.3) {
+            console.log('觸發炮友試探場景');
+            setScene(26);
+          } else if (choice.nextScene !== undefined) {
+            setScene(choice.nextScene);
+          } else if (choice.ending) {
+            console.log('設置結局:', choice.ending);
+            setGameEnded(true);
+            setEnding(choice.ending);
+          }
+        } catch (error) {
+          console.error('處理選擇錯誤:', error);
+        }
+      };
+
+      // 重啟遊戲
+      const restartGame = () => {
+        console.log('重啟遊戲');
+        try {
+          setScene(0);
+          setTrust(50);
+          setAffection(30);
+          setStance('neutral');
+          setHistory([]);
+          setMemories([]);
+          setKeyChoices([]);
+          setGameEnded(false);
+          setEnding(null);
+        } catch (error) {
+          console.error('重啟遊戲錯誤:', error);
+        }
+      };
+
+      // 渲染當前場景
+      const currentScene = scenes[scene];
+      const shuffledChoices = shuffleArray(currentScene.choices);
+
+      return (
+        <div className="container">
+          <h1>學姊的訊息</h1>
+          {gameEnded ? (
+            <div>
+              <h2>結局</h2>
+              <p className="dialogue">{endings[ending]}</p>
+              <p className="ending-id">結局 ID: {ending}</p>
+              <div className="memory-fragments">
+                <h3>收集的記憶碎片</h3>
+                {memories.length > 0 ? (
+                  memories.map((memory, index) => (
+                    <p key={index} className="memory-item">・ {memory}</p>
+                  ))
+                ) : (
+                  <p>你沒有收集到任何記憶碎片。</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="dialogue">
+                <p>{currentScene.text}</p>
+              </div>
+              <div>
+                {shuffledChoices.map((choice, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleChoice(choice)}
+                    className="choice-button"
+                  >
+                    {choice.text}
+                  </button>
+                ))}
+              </div>
+              <div className="stats">
+                <p>{getRelationshipHint()}</p>
+              </div>
+              <div className="memory-fragments">
+                <h3>當前記憶碎片</h3>
+                {memories.length > 0 ? (
+                  memories.map((memory, index) => (
+                    <p key={index} className="memory-item">・ {memory}</p>
+                  ))
+                ) : (
+                  <p>尚未收集任何記憶碎片。</p>
+                )}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={restartGame}
+            className="restart-button"
+          >
+            重新開始
+          </button>
+        </div>
+      );
+    };
+
+    // 渲染遊戲
+    try {
+      const rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error('找不到 root 元素');
+      }
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(
+        <ErrorBoundary>
+          <Game />
+        </ErrorBoundary>
+      );
+    } catch (error) {
+      console.error('渲染失敗:', error);
+    }
+  </script>
+</body>
+</html>
