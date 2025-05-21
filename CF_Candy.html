@@ -1,0 +1,528 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>晴方的喜糖</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <style>
+    body { margin: 0; }
+    canvas { position: absolute; left: 0; top: 0; border: 2px solid #333; }
+    #dialog { position: absolute; top: 620px; left: 20px; right: 20px; background: rgba(255, 255, 255, 0.9); padding: 10px; font-family: Arial; font-size: 16px; z-index: 1000; }
+    #input { position: absolute; top: 250px; left: 350px; padding: 5px; background: #fff; border: 1px solid #000; z-index: 1000; }
+  </style>
+</head>
+<body>
+  <div id="dialog"></div>
+  <input id="input" type="number" pattern="[0-9]{4}" maxlength="4" style="display: none;" placeholder="輸入密碼（4位數）">
+<script>
+"use strict";
+
+let gameState = 'intro';
+let currentScene = 'intro';
+let dialogText = 'Ready收到晴方的郵件，邀請他到語言學研究室。點擊繼續...';
+let previousScene = 'lab';
+let candies = [
+  { x: 100, y: 200, collected: false, locked: true, memory: '國中時，晴方在課堂上分享了一顆喜糖，笑得像陽光一樣燦爛。' },
+  { x: 600, y: 300, collected: false, locked: true, memory: '操場上，晴方害羞地送你一顆喜糖，卻沒說出心意。' },
+  { x: 400, y: 500, collected: false, locked: true, memory: '晴方留下一封未寄出的信，寫著她因搬家離開的無奈。' },
+  { x: 300, y: 400, collected: false, locked: true, memory: '你們在星空下許願，希望未來能再次相遇。' }
+];
+let memories = [];
+let collectedCandies = 0;
+let allCandiesCollected = false;
+let inventory = [];
+let inputVisible = false;
+let puzzlePieces = [];
+let puzzleOrder = [3, 2, 1, 0];
+let selectedPiece = -1;
+let timelineOrder = [4, 3, 2, 1];
+let timelineCorrect = [1, 2, 3, 4];
+let timelineEvents = ['國中相遇', '分享喜糖', '操場告白', '離別'];
+
+function setup() {
+  createCanvas(800, 600);
+  pixelDensity(1);
+  let input = select('#input');
+  input.changed(checkPassword);
+  input.elt.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') checkPassword();
+  });
+}
+
+function draw() {
+  background(220);
+  let mouseOverButton = false;
+
+  if (currentScene === 'intro') {
+    fill(0);
+    textSize(20);
+    text('Ready回想起國中時與晴方的初戀...\n點擊進入研究室', 50, 50, 700, 500);
+  } else if (currentScene === 'lab') {
+    fill(100);
+    rect(50, 50, 700, 500);
+    fill(150);
+    rect(300, 100, 200, 100);
+    textSize(16);
+    fill(0);
+    text('AI終端機', 350, 90);
+    fill(0, 255, 255);
+    rect(100, 400, 100, 50);
+    text('書架', 120, 390);
+    fill(255, 255, 0);
+    rect(600, 400, 100, 50);
+    text('日曆', 620, 390);
+    fill(255, 0, 0);
+    rect(400, 450, 50, 50);
+    text('保險箱', 410, 440);
+    fill(255, 204, 0);
+    for (let candy of candies) {
+      if (!candy.collected && !candy.locked && candy.x < 600) {
+        ellipse(candy.x, candy.y, 20, 20);
+      }
+    }
+    fill(255);
+    rect(20, 20, 100, 150);
+    for (let i = 0; i < collectedCandies; i++) {
+      fill(255, 204, 0);
+      ellipse(30 + i * 20, 120, 15, 15);
+    }
+    textSize(14);
+    fill(0);
+    text('口袋\n喜糖: ' + collectedCandies + '/4\n碎片: ' + puzzlePieces.length + '/4', 30, 40);
+    fill(mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550 ? 0 : 0, 0, 255);
+    rect(650, 500, 100, 50);
+    fill(0);
+    text('去辦公桌', 660, 530);
+    if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) mouseOverButton = true;
+    if (collectedCandies === 3 && currentScene !== 'corridor') {
+      fill(mouseX > 650 && mouseX < 750 && mouseY > 450 && mouseY < 500 ? 0 : 0, 255, 0);
+      rect(650, 450, 100, 50);
+      fill(0);
+      text('回憶走廊', 660, 480);
+      if (mouseX > 650 && mouseX < 750 && mouseY > 450 && mouseY < 500) mouseOverButton = true;
+    }
+  } else if (currentScene === 'desk') {
+    fill(100);
+    rect(50, 50, 700, 500);
+    fill(200);
+    rect(300, 200, 200, 100);
+    textSize(16);
+    fill(0);
+    text('電腦', 350, 190);
+    if (gameState === 'quiz2') {
+      fill(0);
+      text('輸入4位數密碼', 310, 240);
+    }
+    fill(255);
+    rect(100, 400, 100, 50);
+    text('照片', 120, 390);
+    fill(150);
+    rect(600, 400, 100, 50);
+    text('記事本', 620, 390);
+    fill(255, 204, 0);
+    for (let candy of candies) {
+      if (!candy.collected && !candy.locked && candy.x >= 600) {
+        ellipse(candy.x, candy.y, 20, 20);
+      }
+    }
+    fill(255);
+    rect(20, 20, 100, 150);
+    for (let i = 0; i < collectedCandies; i++) {
+      fill(255, 204, 0);
+      ellipse(30 + i * 20, 120, 15, 15);
+    }
+    textSize(14);
+    fill(0);
+    text('口袋\n喜糖: ' + collectedCandies + '/4\n碎片: ' + puzzlePieces.length + '/4', 30, 40);
+    fill(mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550 ? 0 : 0, 0, 255);
+    rect(650, 500, 100, 50);
+    fill(0);
+    text('回研究室', 660, 530);
+    if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) mouseOverButton = true;
+    if (collectedCandies === 3 && currentScene !== 'corridor') {
+      fill(mouseX > 650 && mouseX < 750 && mouseY > 450 && mouseY < 500 ? 0 : 0, 255, 0);
+      rect(650, 450, 100, 50);
+      fill(0);
+      text('回憶走廊', 660, 480);
+      if (mouseX > 650 && mouseX < 750 && mouseY > 450 && mouseY < 500) mouseOverButton = true;
+    }
+  } else if (currentScene === 'corridor') {
+    fill(100);
+    rect(50, 50, 700, 500);
+    fill(150);
+    rect(300, 100, 200, 100);
+    textSize(16);
+    fill(0);
+    text('時間線', 350, 90);
+    noStroke();
+    for (let i = 0; i < 4; i++) {
+      stroke(selectedPiece === i ? 255 : 0, 0, 0);
+      strokeWeight(selectedPiece === i ? 2 : 0);
+      fill(timelineOrder[i] === timelineCorrect[i] ? 0 : 255);
+      rect(200 + i * 100, 300, 80, 50);
+      fill(0);
+      text(timelineEvents[timelineOrder[i] - 1], 210 + i * 100, 320);
+      stroke(0);
+      strokeWeight(0);
+    }
+    fill(255, 204, 0);
+    for (let candy of candies) {
+      if (!candy.collected && !candy.locked && candy.x >= 600) {
+        ellipse(candy.x, candy.y, 20, 20);
+      }
+    }
+    fill(255);
+    rect(20, 20, 100, 150);
+    for (let i = 0; i < collectedCandies; i++) {
+      fill(255, 204, 0);
+      ellipse(30 + i * 20, 120, 15, 15);
+    }
+    textSize(14);
+    fill(0);
+    text('口袋\n喜糖: ' + collectedCandies + '/4\n碎片: ' + puzzlePieces.length + '/4', 30, 40);
+    fill(mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550 ? 0 : 0, 0, 255);
+    rect(650, 500, 100, 50);
+    fill(0);
+    text('回研究室', 660, 530);
+    if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) mouseOverButton = true;
+  } else if (currentScene === 'memory') {
+    fill(0);
+    textSize(20);
+    text(memories[memories.length - 1], 50, 50, 700, 500);
+    if (frameCount % 120 === 0) {
+      currentScene = previousScene;
+      dialogText = collectedCandies < 3 ? '當前場景：' + (previousScene === 'lab' ? '研究室' : '辦公桌') + '。繼續探索！' : collectedCandies === 3 ? '你已收集3顆喜糖！探索回憶走廊。' : '你已收集所有喜糖！檢查口袋繼續劇情。';
+    }
+  } else if (currentScene === 'puzzle') {
+    fill(100);
+    rect(50, 50, 700, 500);
+    textSize(16);
+    noStroke();
+    for (let i = 0; i < puzzlePieces.length; i++) {
+      stroke(selectedPiece === i ? 255 : 0, 0, 0);
+      strokeWeight(selectedPiece === i ? 2 : 0);
+      fill(puzzleOrder[i] === i ? 0 : 255);
+      rect(200 + i * 100, 300, 80, 50);
+      fill(0);
+      text(puzzlePieces[puzzleOrder[i]], 210 + i * 100, 320);
+      stroke(0);
+      strokeWeight(0);
+    }
+    fill(255);
+    rect(20, 20, 100, 150);
+    for (let i = 0; i < collectedCandies; i++) {
+      fill(255, 204, 0);
+      ellipse(30 + i * 20, 120, 15, 15);
+    }
+    textSize(14);
+    fill(0);
+    text('口袋\n喜糖: ' + collectedCandies + '/4\n碎片: ' + puzzlePieces.length + '/4', 30, 40);
+    fill(mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550 ? 0 : 0, 0, 255);
+    rect(650, 500, 100, 50);
+    fill(0);
+    text('回研究室', 660, 530);
+    if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) mouseOverButton = true;
+  } else if (currentScene === 'ending') {
+    fill(200);
+    rect(50, 50, 700, 500);
+    fill(0);
+    textSize(20);
+    text('你找到所有喜糖！\n是否放入LinguaNet？\n（點擊 Y/N）', 100, 100);
+    fill(mouseX > 200 && mouseX < 300 && mouseY > 300 && mouseY < 350 ? 0 : 0, 255, 0);
+    rect(200, 300, 100, 50);
+    fill(mouseX > 400 && mouseX < 500 && mouseY > 300 && mouseY < 350 ? 0 : 255, 0, 0);
+    rect(400, 300, 100, 50);
+    fill(0);
+    text('Y', 240, 330);
+    text('N', 440, 330);
+    if (mouseX > 200 && mouseX < 300 && mouseY > 300 && mouseY < 350 || mouseX > 400 && mouseX < 500 && mouseY > 300 && mouseY < 350) mouseOverButton = true;
+  } else if (currentScene === 'ending1') {
+    fill(0);
+    textSize(20);
+    text('Ready將喜糖珍藏在心底，微笑著離開研究室。\n- 結局：珍藏回憶', 50, 50, 700, 500);
+  } else if (currentScene === 'ending2') {
+    fill(0);
+    textSize(20);
+    text('晴方出現在門口，微笑著說：「謝謝你還記得。」\n- 結局：重新聯繫', 50, 50, 700, 500);
+  }
+  select('#dialog').html(dialogText);
+  select('#input').style('display', inputVisible ? 'block' : 'none');
+}
+
+function mousePressed() {
+  if (gameState === 'intro') {
+    currentScene = 'lab';
+    gameState = 'exploring';
+    dialogText = '當前場景：研究室。探索物品尋找喜糖！';
+  } else if (gameState === 'exploring') {
+    for (let candy of candies) {
+      if (!candy.collected && !candy.locked && dist(mouseX, mouseY, candy.x, candy.y) < 20) {
+        candy.collected = true;
+        collectedCandies++;
+        memories.push(candy.memory);
+        previousScene = currentScene;
+        currentScene = 'memory';
+        dialogText = candy.memory;
+        if (collectedCandies === 4) {
+          allCandiesCollected = true;
+        }
+        return;
+      }
+    }
+    for (let i = 0; i < collectedCandies; i++) {
+      if (dist(mouseX, mouseY, 30 + i * 20, 120) < 7.5) {
+        if (allCandiesCollected && collectedCandies === 4) {
+          currentScene = 'ending';
+          gameState = 'ending';
+          dialogText = '';
+        } else {
+          previousScene = currentScene;
+          currentScene = 'memory';
+          dialogText = memories[i];
+        }
+        return;
+      }
+    }
+    if (currentScene === 'lab') {
+      if (mouseX > 300 && mouseX < 500 && mouseY > 100 && mouseY < 200 && candies[0].locked) {
+        dialogText = 'LinguaNet：請選擇「喜糖」的情感語義：\nA. 快樂 B. 遺憾 C. 期待';
+        gameState = 'quiz1';
+      }
+      if (mouseX > 100 && mouseX < 200 && mouseY > 400 && mouseY < 450 && !inventory.includes('notebook')) {
+        inventory.push('notebook');
+        if (puzzlePieces.length < 4) {
+          puzzlePieces.push(['我', '喜歡你', '但', '必須離開'][puzzlePieces.length]);
+          dialogText = '你找到筆記本，內有碎片：' + puzzlePieces[puzzlePieces.length - 1];
+        } else {
+          dialogText = '你找到筆記本，寫著：「喜糖=甜蜜回憶」。';
+        }
+      }
+      if (mouseX > 600 && mouseX < 700 && mouseY > 400 && mouseY < 450 && !inventory.includes('calendar')) {
+        inventory.push('calendar');
+        if (puzzlePieces.length < 4) {
+          puzzlePieces.push(['我', '喜歡你', '但', '必須離開'][puzzlePieces.length]);
+          dialogText = '你找到日曆，5月12日被圈起來，寫著「Ready生日」。內有碎片：' + puzzlePieces[puzzlePieces.length - 1];
+        } else {
+          dialogText = '你找到日曆，5月12日被圈起來，寫著「Ready生日」。';
+        }
+      }
+      if (mouseX > 400 && mouseX < 450 && mouseY > 450 && mouseY < 500 && candies[2].locked) {
+        if (puzzlePieces.length === 4) {
+          currentScene = 'puzzle';
+          gameState = 'puzzle';
+          dialogText = '排列信件碎片，組成正確句子。';
+        } else {
+          dialogText = '保險箱需要四片信件碎片。你已收集：' + puzzlePieces.length + '/4';
+        }
+      }
+      if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) {
+        currentScene = 'desk';
+        dialogText = '當前場景：辦公桌。探索物品尋找喜糖！';
+        return;
+      }
+      if (collectedCandies === 3 && mouseX > 650 && mouseX < 750 && mouseY > 450 && mouseY < 500 && currentScene !== 'corridor') {
+        currentScene = 'corridor';
+        previousScene = 'lab';
+        dialogText = '當前場景：回憶走廊。排列時間線，解鎖最後喜糖。';
+        timelineOrder = [4, 3, 2, 1];
+        return;
+      }
+    }
+    if (currentScene === 'desk') {
+      if (mouseX > 300 && mouseX < 500 && mouseY > 200 && mouseY < 300 && candies[1].locked) {
+        dialogText = '電腦螢幕顯示：「輸入心跳頻率（4位數）」。';
+        inputVisible = true;
+        gameState = 'quiz2';
+      }
+      if (mouseX > 100 && mouseX < 200 && mouseY > 400 && mouseY < 450 && !inventory.includes('photo')) {
+        inventory.push('photo');
+        if (puzzlePieces.length < 4) {
+          puzzlePieces.push(['我', '喜歡你', '但', '必須離開'][puzzlePieces.length]);
+          dialogText = '你找到一張照片，背面寫著：「0512」。內有碎片：' + puzzlePieces[puzzlePieces.length - 1];
+        } else {
+          dialogText = '你找到一張照片，背面寫著：「0512」。';
+        }
+      }
+      if (mouseX > 600 && mouseX < 700 && mouseY > 400 && mouseY < 450 && !inventory.includes('pen')) {
+        inventory.push('pen');
+        if (puzzlePieces.length < 4) {
+          puzzlePieces.push(['我', '喜歡你', '但', '必須離開'][puzzlePieces.length]);
+          dialogText = '你找到一支筆，上面刻著晴方的名字。內有碎片：' + puzzlePieces[puzzlePieces.length - 1];
+        } else {
+          dialogText = '你找到一支筆，上面刻著晴方的名字。';
+        }
+      }
+      if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) {
+        currentScene = 'lab';
+        gameState = 'exploring';
+        dialogText = '當前場景：研究室。探索物品尋找喜糖！';
+        return;
+      }
+      if (collectedCandies === 3 && mouseX > 650 && mouseX < 750 && mouseY > 450 && mouseY < 500 && currentScene !== 'corridor') {
+        currentScene = 'corridor';
+        previousScene = 'desk';
+        dialogText = '當前場景：回憶走廊。排列時間線，解鎖最後喜糖。';
+        timelineOrder = [4, 3, 2, 1];
+        return;
+      }
+    }
+    if (currentScene === 'corridor') {
+      if (mouseX >= 200 && mouseX < 580 && mouseY >= 300 && mouseY <= 350 && candies[3].locked) {
+        let index = -1;
+        if (mouseX >= 200 && mouseX < 280) index = 0;
+        else if (mouseX >= 300 && mouseX < 380) index = 1;
+        else if (mouseX >= 400 && mouseX < 480) index = 2;
+        else if (mouseX >= 500 && mouseX < 580) index = 3;
+        if (index >= 0 && index < 4) {
+          if (selectedPiece === -1) {
+            selectedPiece = index;
+            dialogText = '選擇第一個事件：' + timelineEvents[timelineOrder[index] - 1];
+          } else {
+            let temp = timelineOrder[selectedPiece];
+            timelineOrder[selectedPiece] = timelineOrder[index];
+            timelineOrder[index] = temp;
+            selectedPiece = -1;
+            let correct = true;
+            for (let i = 0; i < 4; i++) {
+              if (timelineOrder[i] !== timelineCorrect[i]) correct = false;
+            }
+            if (correct) {
+              candies[3].locked = false;
+              dialogText = '時間線正確！你在牆上找到第四顆喜糖！';
+            } else {
+              dialogText = '時間線錯誤。當前順序：' + timelineOrder.map(i => timelineEvents[i - 1]).join('→') + '\n提示：正確順序是國中相遇→分享喜糖→操場告白→離別';
+            }
+          }
+        } else {
+          dialogText = '請點擊時間線事件區域';
+        }
+      }
+      if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) {
+        currentScene = 'lab';
+        gameState = 'exploring';
+        dialogText = '當前場景：研究室。探索物品尋找喜糖！';
+        return;
+      }
+    }
+  } else if (gameState === 'quiz1') {
+    if (mouseX > 100 && mouseX < 200 && mouseY > 400 && mouseY < 450) {
+      candies[0].locked = false;
+      dialogText = '正確！「喜糖」代表快樂。你在書架上找到第一顆喜糖！';
+      gameState = 'exploring';
+    } else {
+      dialogText = '錯誤。提示：查看筆記本。';
+      gameState = 'exploring';
+    }
+  } else if (gameState === 'quiz2') {
+    if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) {
+      currentScene = 'lab';
+      dialogText = '當前場景：研究室。探索物品尋找喜糖！';
+      inputVisible = false;
+      gameState = 'exploring';
+    }
+  } else if (gameState === 'puzzle') {
+    if (mouseX >= 200 && mouseX < 580 && mouseY >= 300 && mouseY <= 350) {
+      let index = -1;
+      if (mouseX >= 200 && mouseX < 280) index = 0;
+      else if (mouseX >= 300 && mouseX < 380) index = 1;
+      else if (mouseX >= 400 && mouseX < 480) index = 2;
+      else if (mouseX >= 500 && mouseX < 580) index = 3;
+      if (index >= 0 && index < 4) {
+        if (selectedPiece === -1) {
+          selectedPiece = index;
+          dialogText = '選擇第一個碎片：' + puzzlePieces[puzzleOrder[index]];
+        } else {
+          let temp = puzzleOrder[selectedPiece];
+          puzzleOrder[selectedPiece] = puzzleOrder[index];
+          puzzleOrder[index] = temp;
+          selectedPiece = -1;
+          if (puzzleOrder.join('') === '0123') {
+            candies[2].locked = false;
+            currentScene = 'lab';
+            gameState = 'exploring';
+            dialogText = '信件拼湊完成！你打開保險箱，找到第三顆喜糖！';
+          } else {
+            dialogText = '碎片順序錯誤。當前順序：' + puzzleOrder.map(i => puzzlePieces[i]).join(' ') + '\n提示：正確句子是「我喜歡你，但必須離開」';
+          }
+        }
+      } else {
+        dialogText = '請點擊碎片區域';
+      }
+    } else {
+      selectedPiece = -1;
+      dialogText = '請點擊碎片區域';
+    }
+    if (mouseX > 650 && mouseX < 750 && mouseY > 500 && mouseY < 550) {
+      currentScene = 'lab';
+      gameState = 'exploring';
+      dialogText = '當前場景：研究室。探索物品尋找喜糖！';
+      return;
+    }
+  } else if (currentScene === 'ending') {
+    if (mouseX > 200 && mouseX < 300 && mouseY > 300 && mouseY < 350) {
+      currentScene = 'ending2';
+      dialogText = '';
+    } else if (mouseX > 400 && mouseX < 500 && mouseY > 300 && mouseY < 350) {
+      currentScene = 'ending1';
+      dialogText = '';
+    }
+  }
+}
+
+function checkPassword() {
+  let input = select('#input').value();
+  if (input.length !== 4) return;
+  if (gameState === 'quiz2' && input === '0512') {
+    candies[1].locked = false;
+    dialogText = '密碼正確！你在電腦旁找到第二顆喜糖！';
+    gameState = 'exploring';
+    inputVisible = false;
+  } else {
+    dialogText = '密碼錯誤。提示：照片或日曆上的數字。';
+    gameState = 'exploring';
+    inputVisible = false;
+  }
+  select('#input').value('');
+}
+</script>
+</body>
+</html>
