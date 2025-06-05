@@ -1,0 +1,271 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>誠摯的抉擇 - Galgame</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.9/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+  <script>
+    MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="root" class="min-h-screen flex items-center justify-center"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const Game = () => {
+      const [scene, setScene] = useState('intro');
+      const [affinity, setAffinity] = useState({ qing: 0, shandi: 0, colleague: 0 });
+      const [history, setHistory] = useState([]);
+
+      const updateAffinity = (character, value) => {
+        setAffinity(prev => ({ ...prev, [character]: prev[character] + value }));
+      };
+
+      const getAffinityLevel = (value) => {
+        if (value < 3) return '低';
+        if (value < 6) return '中';
+        return '高';
+      };
+
+      const addHistory = (entry) => {
+        setHistory(prev => [...prev, entry]);
+      };
+
+      const scenes = {
+        intro: {
+          text: '你叫葉誠摯，二十多歲，在一家知名科技公司擔任SSD研發工程師。你的生活圍繞著\\( T_{access} = T_{seek} + T_{latency} \\)的公式和數據。某天，你收到一封來自國中同學方晴的訊息，喚起了塵封的回憶……',
+          options: [
+            { text: '回覆方晴的訊息', nextScene: 'qing1', action: () => updateAffinity('qing', 1) },
+            { text: '先去看看姍蒂在幹嘛', nextScene: 'shandi1', action: () => updateAffinity('shandi', 1) },
+            { text: '下班後約大同事去夜市', nextScene: 'colleague1', action: () => updateAffinity('colleague', 1) }
+          ]
+        },
+        qing1: {
+          text: '方晴在訊息中提到她正在研究語言模型，特別是基於\\( P(w_t | w_{t-1}) \\)的預測模型。她問你是否願意幫她測試一個語言生成程式。你感受到她對研究的熱情，像是回到了國中時的她。',
+          options: [
+            { text: '答應幫她測試程式', nextScene: 'qing2', action: () => updateAffinity('qing', 2) },
+            { text: '婉拒，說最近工作忙', nextScene: 'intro', action: () => updateAffinity('qing', -1) },
+            { text: '轉而聯繫姍蒂', nextScene: 'shandi1', action: () => updateAffinity('shandi', 1) }
+          ]
+        },
+        qing2: {
+          text: '你和方晴在咖啡廳碰面，她興奮地展示她的語言模型，解釋如何用\\( L = -\sum log P(w_t | w_{t-1}) \\)計算損失函數。她的眼神閃爍，你感覺彼此的距離拉近了。',
+          options: [
+            { text: '讚美她的研究，約下次見面', nextScene: 'qing3', action: () => updateAffinity('qing', 2) },
+            { text: '轉而聊你的SSD工作', nextScene: 'intro', action: () => updateAffinity('qing', 0) },
+            { text: '收到姍蒂的訊息，查看', nextScene: 'shandi1', action: () => updateAffinity('shandi', 1) }
+          ]
+        },
+        qing3: {
+          text: '方晴邀請你參加她的研究小組分享會，會上有許多學者討論\\( P(w_t | w_{t-n}, \theta) \\)的多模態應用。你看著她自信地演講，覺得她更加迷人。',
+          options: [
+            { text: '主動提議幫她整理演講資料', nextScene: 'qing4', action: () => updateAffinity('qing', 2) },
+            { text: '默默支持，會後離開', nextScene: 'intro', action: () => updateAffinity('qing', 0) },
+            { text: '約大同事去夜市放鬆', nextScene: 'colleague1', action: () => updateAffinity('colleague', 1) }
+          ]
+        },
+        qing4: {
+          text: '你幫方晴整理資料，兩人熬夜討論模型優化。她笑說：「有你在，我的研究效率都提升了！」你感受到彼此的默契越來越強。',
+          options: [
+            { text: '邀請她週末一起看技術展覽', nextScene: 'qing5', action: () => updateAffinity('qing', 2) },
+            { text: '說工作忙，結束話題', nextScene: 'intro', action: () => updateAffinity('qing', -1) }
+          ]
+        },
+        qing5: {
+          text: '技術展覽上，方晴興奮地拉你去看最新的AI硬體展示。你們討論如何將\\( T_{access} \\)的優化應用於她的模型，氣氛熱烈。',
+          options: [
+            { text: '鼓勵她發表聯合研究論文', nextScene: 'qing6', action: () => updateAffinity('qing', 2) },
+            { text: '轉而聊其他話題', nextScene: 'intro', action: () => updateAffinity('qing', 0) }
+          ]
+        },
+        qing6: {
+          text: '方晴接受你的建議，開始準備論文。她說：「誠摯，沒有你我可能不會走這一步。」你們的關係似乎有了新的可能。',
+          options: [
+            { text: '表達你的心意，約她正式交往', nextScene: 'ending', action: () => updateAffinity('qing', 3) },
+            { text: '保持朋友關係，繼續支持', nextScene: 'intro', action: () => updateAffinity('qing', 1) }
+          ]
+        },
+        shandi1: {
+          text: '姍蒂傳來一串語音訊息，抱怨她的男友又跟別的女生曖昧。她提到自己最近心情低落，甚至懷疑自己的價值。',
+          options: [
+            { text: '安慰她，說她值得更好的', nextScene: 'shandi2', action: () => updateAffinity('shandi', 2) },
+            { text: '建議她冷靜一下再談', nextScene: 'intro', action: () => updateAffinity('shandi', -1) },
+            { text: '約大同事去夜市轉換心情', nextScene: 'colleague1', action: () => updateAffinity('colleague', 1) }
+          ]
+        },
+        shandi2: {
+          text: '你安慰姍蒂，她的情緒逐漸穩定。她說：「誠摯，你總是能讓我安心。」她靠在你肩上，你感受到她的溫暖。',
+          options: [
+            { text: '約她去散步，聊聊未來', nextScene: 'shandi3', action: () => updateAffinity('shandi', 2) },
+            { text: '保持距離，建議她自己思考', nextScene: 'intro', action: () => updateAffinity('shandi', 0) },
+            { text: '收到方晴的訊息，查看', nextScene: 'qing1', action: () => updateAffinity('qing', 1) }
+          ]
+        },
+        shandi3: {
+          text: '你和姍蒂在公園散步，她坦白自己的感情生活很混亂，但她說：「跟你在一起時，我覺得自己可以更好。」',
+          options: [
+            { text: '鼓勵她重新整理生活', nextScene: 'shandi4', action: () => updateAffinity('shandi', 2) },
+            { text: '說你只想當朋友', nextScene: 'intro', action: () => updateAffinity('shandi', -1) }
+          ]
+        },
+        shandi4: {
+          text: '姍蒂開始試著改變，減少與其他人的曖昧聯繫。她邀請你一起參加一個文學講座，討論語言學中的\\( H = -\sum P(x) \log P(x) \\)。',
+          options: [
+            { text: '陪她參加講座，分享想法', nextScene: 'shandi5', action: () => updateAffinity('shandi', 2) },
+            { text: '婉拒，說有其他安排', nextScene: 'intro', action: () => updateAffinity('shandi', 0) }
+          ]
+        },
+        shandi5: {
+          text: '講座結束後，姍蒂說她想重新開始，專注於自己和真正重要的人。你感覺她正在慢慢向你敞開心扉。',
+          options: [
+            { text: '告訴她你願意陪她一起成長', nextScene: 'shandi6', action: () => updateAffinity('shandi', 2) },
+            { text: '保持距離，祝她好運', nextScene: 'intro', action: () => updateAffinity('shandi', 0) }
+          ]
+        },
+        shandi6: {
+          text: '姍蒂感動地看著你，說：「誠摯，我從沒想過會有這樣的改變。」你們的關係似乎即將進入新階段。',
+          options: [
+            { text: '向她表白，開始新關係', nextScene: 'ending', action: () => updateAffinity('shandi', 3) },
+            { text: '說你需要時間考慮', nextScene: 'intro', action: () => updateAffinity('shandi', 1) }
+          ]
+        },
+        colleague1: {
+          text: '你和大同事來到夜市，燈光閃爍，攤販的叫賣聲此起彼落。大同事興奮地拉你去買雞排，笑說：「吃飽了才能挑戰\\( T_{access} \\)的極限！」',
+          options: [
+            { text: '跟她一起挑戰吃辣雞排', nextScene: 'colleague2', action: () => updateAffinity('colleague', 2) },
+            { text: '說你吃不下，改去逛攤位', nextScene: 'intro', action: () => updateAffinity('colleague', -1) },
+            { text: '收到方晴的訊息，查看', nextScene: 'qing1', action: () => updateAffinity('qing', 1) }
+          ]
+        },
+        colleague2: {
+          text: '你和大同事挑戰辣雞排，兩人辣得眼淚直流，卻笑得開心。她說：「跟你一起總是這麼有趣！」夜市的燈光映在她眼中格外迷人。',
+          options: [
+            { text: '邀請她週末去密室逃脫', nextScene: 'colleague3', action: () => updateAffinity('colleague', 2) },
+            { text: '說今晚很開心，下次再約', nextScene: 'intro', action: () => updateAffinity('colleague', 0) }
+          ]
+        },
+        colleague3: {
+          text: '密室逃脫中，你和大同事合作無間，成功解開所有謎題。她興奮地說：「我們簡直是最佳拍檔！」你們的默契越來越好。',
+          options: [
+            { text: '提議下次一起去露營', nextScene: 'colleague4', action: () => updateAffinity('colleague', 2) },
+            { text: '說玩得很開心，結束活動', nextScene: 'intro', action: () => updateAffinity('colleague', 0) }
+          ]
+        },
+        colleague4: {
+          text: '露營時，你和大同事一起搭帳篷、點篝火。她笑說：「這比debugging \\( T_{latency} \\)有趣多了！」你們聊了很多心事。',
+          options: [
+            { text: '分享你的夢想，邀她一起實現', nextScene: 'colleague5', action: () => updateAffinity('colleague', 2) },
+            { text: '保持輕鬆，聊其他話題', nextScene: 'intro', action: () => updateAffinity('colleague', 0) }
+          ]
+        },
+        colleague5: {
+          text: '大同事說她很珍惜和你共度的時光，問你是否願意更進一步。你感覺到她對你的信任和依賴。',
+          options: [
+            { text: '告訴她你也想更進一步', nextScene: 'colleague6', action: () => updateAffinity('colleague', 2) },
+            { text: '說你想維持現狀', nextScene: 'intro', action: () => updateAffinity('colleague', 0) }
+          ]
+        },
+        colleague6: {
+          text: '大同事笑著說：「誠摯，沒想到我們會走到這一步。」你們在星空下許下未來的承諾。',
+          options: [
+            { text: '正式向她表白', nextScene: 'ending', action: () => updateAffinity('colleague', 3) },
+            { text: '說需要更多時間', nextScene: 'intro', action: () => updateAffinity('colleague', 1) }
+          ]
+        },
+        ending: {
+          text: () => {
+            const maxAffinity = Math.max(affinity.qing, affinity.shandi, affinity.colleague);
+            if (maxAffinity < 6) return '你的生活回到了原本的軌道，專注於SSD研發，偶爾回想起這段時光，卻沒有特別的結局。';
+            if (affinity.qing === maxAffinity) return '你和方晴因為共同的興趣越走越近，最終成為了彼此的依靠，攜手探索語言模型與SSD的未來。';
+            if (affinity.shandi === maxAffinity) return '你幫助姍蒂走出了感情的低谷，她最終選擇了你，兩人開始了一段新的旅程。';
+            return '你和大同事的默契越來越好，從夜市到露營，你們成為了彼此生活中不可或缺的一部分。';
+          },
+          options: [
+            { text: '重新開始', nextScene: 'intro', action: () => setAffinity({ qing: 0, shandi: 0, colleague: 0 }) }
+          ]
+        }
+      };
+
+      const handleChoice = (option) => {
+        if (option.action) option.action();
+        addHistory({ scene: scene, choice: option.text });
+        setScene(option.nextScene);
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto p-4 bg-white rounded-lg shadow-lg">
+          <h1 className="text-2xl font-bold mb-4 text-center">誠摯的抉擇</h1>
+          <div className="mb-4 p-4 bg-gray-50 rounded">
+            <p className="text-lg" dangerouslySetInnerHTML={{ __html: typeof scenes[scene].text === 'function' ? scenes[scene].text() : scenes[scene].text }} />
+          </div>
+          <div className="space-y-2">
+            {scenes[scene].options.map((option, index) => (
+              <button
+                key={index}
+                className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                onClick={() => handleChoice(option)}
+              >
+                {option.text}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 p-2 bg-gray-100 rounded">
+            <h2 className="text-sm font-semibold">好感度</h2>
+            <p>方晴: {getAffinityLevel(affinity.qing)} | 姍蒂: {getAffinityLevel(affinity.shandi)} | 大同事: {getAffinityLevel(affinity.colleague)}</p>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<Game />, document.getElementById('root'));
+  </script>
+</body>
+</html>
