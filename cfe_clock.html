@@ -125,10 +125,21 @@
             justify-content: center;
             align-items: center;
             color: #2F4F7F;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, box-shadow 0.3s;
         }
         .control-btn:hover {
             background-color: #A1B8D1;
+        }
+        .pause-btn {
+            border-color: #336699;
+            background-color: #6699CC;
+        }
+        .pause-btn:hover {
+            background-color: #557FA6;
+        }
+        .pause-btn.paused {
+            background-color: #4D85B3;
+            box-shadow: 0 0 10px rgba(51, 102, 153, 0.7);
         }
         .prompt {
             position: absolute;
@@ -207,7 +218,7 @@
         </div>
         <div class="middle-controls">
             <button class="control-btn" onclick="showResetConfirm()">重置</button>
-            <button class="control-btn" onclick="togglePause()">暫停</button>
+            <button class="control-btn pause-btn" id="pauseBtn" onclick="togglePause()">暫停</button>
             <button class="control-btn" onclick="showModeSwitch()">初賽</button>
         </div>
         <div class="player player-bottom" id="player2">
@@ -255,7 +266,7 @@
         }
 
         function updateDisplay() {
-            if (isGameStopped) return; // Prevent recursive calls during game stop
+            if (isGameStopped) return; // Prevent recursive calls during stop
             document.getElementById('time1').textContent = formatTime(time1).slice(0, 5);
             document.getElementById('ms1').textContent = formatTime(time1).slice(5);
             document.getElementById('time2').textContent = formatTime(time2).slice(0, 5);
@@ -276,7 +287,7 @@
             const prompt2 = document.getElementById('prompt2');
             if (!gameStarted) {
                 prompt1.textContent = "請後手玩家點選後開始計時";
-                prompt2.textContent = "請後手玩家點選後開始計時";
+                prompt2.textContent = "請後手玩家點選后開始計時";
                 prompt1.classList.add('active');
                 prompt2.classList.add('active');
             } else {
@@ -300,6 +311,14 @@
                 prompt2.classList.add('active');
             }
 
+            // Update pause button state
+            const pauseBtn = document.getElementById('pauseBtn');
+            if (isPaused) {
+                pauseBtn.classList.add('paused');
+            } else {
+                pauseBtn.classList.remove('paused');
+            }
+
             // Update mode button text
             document.getElementsByClassName('control-btn')[2].textContent = mode === 'standard' ? '初賽' : '複賽';
         }
@@ -320,7 +339,7 @@
                 time2 = Math.max(0, time2 - delta);
                 if (time2 <= 0 && !isOvertime2) {
                     isOvertime2 = true;
-                    time2 =基本的
+                    time2 = 40 * 1000;
                 }
             }
             updateDisplay();
@@ -354,6 +373,7 @@
         }
 
         function showResetConfirm() {
+            if (!isPaused && gameStarted) togglePause(); // Pause if game is running
             document.getElementById('resetModal').style.display = 'flex';
         }
 
