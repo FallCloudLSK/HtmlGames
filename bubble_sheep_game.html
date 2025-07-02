@@ -1,0 +1,417 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>泡泡羊大作戰</title>
+  <style>
+    body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: #f0f0f0; }
+    canvas { border: 2px solid #333; }
+    #controls { margin-top: 10px; font-family: Arial, sans-serif; font-size: 14px; color: #333; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="controls">
+    操作說明：<br>
+    左/右箭頭：移動 | X鍵：跳躍（每次消耗20耐力） | Z鍵：短距離衝刺（消耗20耐力，可使羊暈眩） | C鍵：射擊泡泡 | R鍵：下一關<br>
+    羊的類型：<br>
+    黃色羊：射擊或衝刺暈眩後射擊 | 紅色羊：背後射擊或衝刺暈眩後射擊 | 綠色羊：衝刺暈眩後射擊 | 藍色羊：射擊三次或衝刺暈眩後射擊
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 遊戲參數
+    const player = {
+      x: 50, y: 500, width: 30, height: 30, speed: 5, jumpPower: 18, vy: 0, isJumping: false,
+      facing: 1, isDashing: false, dashTime: 0, invulnerable: false, stamina: 100, maxStamina: 100,
+      staminaFlash: 0, afterImages: []
+    };
+    let bubbles = [], sheep = [], platforms = [], level = 1, gameState = 'playing';
+    const gravity = 0.5, friction = 0.8, dashDuration = 10, dashSpeed = 12;
+    const staminaCostDash = 20, staminaCostJump = 20, staminaRecovery = 1;
+    const stunDuration = 120; // 2秒，60幀/秒
+
+    // 鍵盤控制
+    const keys = { ArrowLeft: false, ArrowRight: false, KeyX: false, KeyZ: false, KeyC: false, KeyR: false };
+    let keyXPressed = false, keyZPressed = false; // 追蹤是否已執行過動作
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyX') {
+        keys.KeyX = true;
+      } else if (e.code === 'KeyZ') {
+        keys.KeyZ = true;
+      } else if (e.code === 'KeyR') {
+        keys.KeyR = true;
+      } else if (keys.hasOwnProperty(e.code)) {
+        keys[e.code] = true;
+      }
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyX') {
+        keys.KeyX = false;
+        keyXPressed = false;
+      } else if (e.code === 'KeyZ') {
+        keys.KeyZ = false;
+        keyZPressed = false;
+      } else if (e.code === 'KeyR') {
+        keys.KeyR = false;
+      } else if (keys.hasOwnProperty(e.code)) {
+        keys[e.code] = false;
+      }
+    });
+
+    // 關卡設計
+    const levels = [
+      {
+        platforms: [
+          { x: 0, y: 550, width: 800, height: 50, color: '#4CAF50' },
+          { x: 200, y: 400, width: 200, height: 20, color: '#8BC34A' },
+          { x: 500, y: 300, width: 150, height: 20, color: '#8BC34A' }
+        ],
+        sheep: [
+          { x: 300, y: 520, type: 'normal', color: '#FFEB3B', health: 1, vx: 1, initVx: 1, platform: 0, stunned: false, stunTimer: 0 },
+          { x: 400, y: 520, type: 'normal', color: '#FFEB3B', health: 1, vx: -1, initVx: -1, platform: 0, stunned: false, stunTimer: 0 },
+          { x: 550, y: 270, type: 'normal', color: '#FFEB3B', health: 1, vx: 1, initVx: 1, platform: 2, stunned: false, stunTimer: 0 }
+        ]
+      },
+      {
+        platforms: [
+          { x: 0, y: 550, width: 800, height: 50, color: '#2196F3' },
+          { x: 100, y: 450, width: 150, height: 20, color: '#03A9F4' },
+          { x: 550, y: 350, width: 150, height: 20, color: '#03A9F4' },
+          { x: 300, y: 250, width: 150, height: 20, color: '#03A9F4' }
+        ],
+        sheep: [
+          { x: 200, y: 420, type: 'back', color: '#F44336', health: 1, direction: -1, vx: 1, initVx: 1, platform: 1, stunned: false, stunTimer: 0 },
+          { x: 600, y: 320, type: 'back', color: '#F44336', health: 1, direction: 1, vx: -1, initVx: -1, platform: 2, stunned: false, stunTimer: 0 },
+          { x: 350, y: 220, type: 'normal', color: '#FFEB3B', health: 1, vx: 1, initVx: 1, platform: 3, stunned: false, stunTimer: 0 }
+        ]
+      },
+      {
+        platforms: [
+          { x: 0, y: 550, width: 800, height: 50, color: '#9C27B0' },
+          { x: 150, y: 450, width: 100, height: 20, color: '#E91E63' },
+          { x: 400, y: 350, width: 150, height: 20, color: '#E91E63' },
+          { x: 600, y: 200, width: 100, height: 20, color: '#E91E63' }
+        ],
+        sheep: [
+          { x: 200, y: 420, type: 'stun', color: '#4CAF50', health: 1, vx: 1, initVx: 1, platform: 1, stunned: false, stunTimer: 0 },
+          { x: 450, y: 320, type: 'multi', color: '#2196F3', health: 3, vx: -1, initVx: -1, platform: 2, stunned: false, stunTimer: 0 },
+          { x: 650, y: 170, type: 'back', color: '#F44336', health: 1, direction: -1, vx: 1, initVx: 1, platform: 3, stunned: false, stunTimer: 0 }
+        ]
+      }
+    ];
+
+    // 初始化關卡
+    function initLevel(lvl) {
+      platforms = levels[lvl - 1].platforms;
+      sheep = levels[lvl - 1].sheep.map(s => ({ 
+        ...s, 
+        asleep: false, 
+        stunned: false, 
+        stunTimer: 0, 
+        y: platforms[s.platform].y - 30 
+      }));
+      player.x = 50;
+      player.y = 500;
+      player.vy = 0;
+      player.isJumping = false;
+      player.isDashing = false;
+      player.invulnerable = false;
+      player.stamina = player.maxStamina;
+      player.staminaFlash = 0;
+      player.afterImages = [];
+      keyXPressed = false;
+      keyZPressed = false;
+      bubbles = [];
+      gameState = 'playing';
+    }
+    initLevel(1);
+
+    // 碰撞檢測
+    function collides(a, b) {
+      const bWidth = b.width || 30; // 平台使用width，羊使用30
+      const bHeight = b.height || 30; // 平台使用height，羊使用30
+      return a.x < b.x + bWidth && a.x + a.width > b.x && a.y < b.y + bHeight && a.y + a.height > b.y;
+    }
+
+    // 更新玩家
+    function updatePlayer() {
+      // 衝刺
+      if (keys.KeyZ && !player.isDashing && player.stamina >= staminaCostDash && !keyZPressed) {
+        player.isDashing = true;
+        player.dashTime = dashDuration;
+        player.invulnerable = true;
+        player.stamina -= staminaCostDash;
+        keyZPressed = true;
+      }
+      if (player.isDashing) {
+        player.afterImages.push({ x: player.x, y: player.y, alpha: 0.5 });
+        if (player.afterImages.length > 5) player.afterImages.shift();
+        player.x += player.facing * dashSpeed;
+        if (!player.isJumping) player.vy = 0; // 空中衝刺不立即下落
+        player.dashTime--;
+        if (player.dashTime <= 0) {
+          player.isDashing = false;
+          player.invulnerable = false;
+        }
+      } else {
+        player.afterImages = player.afterImages.map(img => ({ ...img, alpha: img.alpha - 0.1 }));
+        player.afterImages = player.afterImages.filter(img => img.alpha > 0);
+      }
+
+      // 移動
+      if (!player.isDashing) {
+        if (keys.ArrowLeft) {
+          player.x -= player.speed;
+          player.facing = -1;
+        }
+        if (keys.ArrowRight) {
+          player.x += player.speed;
+          player.facing = 1;
+        }
+      }
+      if (player.x < 0) player.x = 0;
+      if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+      // 跳躍
+      if (keys.KeyX && !player.isJumping && !keyXPressed && player.stamina >= staminaCostJump) {
+        player.vy = -player.jumpPower;
+        player.isJumping = true;
+        player.stamina -= staminaCostJump;
+        keyXPressed = true;
+      } else if (keys.KeyX && player.isJumping && player.stamina >= staminaCostJump && !keyXPressed) {
+        player.vy = -player.jumpPower;
+        player.stamina -= staminaCostJump;
+        keyXPressed = true;
+      }
+
+      // 重力
+      if (!player.isDashing || !player.isJumping) {
+        player.vy += gravity;
+        player.y += player.vy;
+        player.vy *= friction;
+      }
+
+      // 平台碰撞
+      let onGround = false;
+      for (let platform of platforms) {
+        if (collides(player, platform) && player.vy >= 0) {
+          player.y = platform.y - player.height;
+          player.vy = 0;
+          player.isJumping = false;
+          onGround = true;
+        }
+      }
+
+      // 地面限制
+      if (player.y > canvas.height - player.height) {
+        player.y = canvas.height - player.height;
+        player.vy = 0;
+        player.isJumping = false;
+        onGround = true;
+      }
+
+      // 耐力恢復
+      if (onGround) {
+        player.stamina = Math.min(player.stamina + staminaRecovery, player.maxStamina);
+        if (player.stamina === player.maxStamina) {
+          player.staminaFlash = 30; // 閃爍30幀
+        }
+      }
+
+      // 射擊
+      if (keys.KeyC && !player.lastShot) {
+        let bubbleSpeed = player.isDashing ? 12 : 8;
+        bubbles.push({ x: player.x + player.width / 2, y: player.y, vx: bubbleSpeed * player.facing, radius: 10 });
+        player.lastShot = true;
+        setTimeout(() => player.lastShot = false, 500);
+      }
+    }
+
+    // 更新泡泡
+    function updateBubbles() {
+      bubbles = bubbles.filter(b => b.x >= 0 && b.x <= canvas.width);
+      for (let bubble of bubbles) {
+        bubble.x += bubble.vx;
+        for (let s of sheep) {
+          if (s.asleep) continue;
+          if (Math.hypot(bubble.x - (s.x + 15), bubble.y - (s.y + 15)) < bubble.radius + 15) {
+            if (s.stunned || s.type === 'normal' || 
+                (s.type === 'back' && bubble.vx > 0 === s.direction < 0) || 
+                s.type === 'multi') {
+              s.health--;
+              if (s.health <= 0) s.asleep = true;
+            }
+            bubbles = bubbles.filter(b => b !== bubble);
+            break;
+          }
+        }
+      }
+    }
+
+    // 更新羊
+    function updateSheep() {
+      for (let s of sheep) {
+        if (s.asleep) continue;
+        if (s.stunned) {
+          s.stunTimer--;
+          s.vx = 0; // 暈眩時停止移動
+          if (s.stunTimer <= 0) {
+            s.stunned = false;
+            s.vx = s.initVx; // 恢復初始速度
+          }
+          continue;
+        }
+        const p = platforms[s.platform];
+        s.x += s.vx;
+        if (s.x < p.x || s.x > p.x + p.width - 30) {
+          s.vx *= -1;
+          s.x = Math.max(p.x, Math.min(p.x + p.width - 30, s.x));
+        }
+        if (Math.random() < 0.02) s.vx = (Math.random() - 0.5) * 2;
+        if (collides(player, s) && player.isDashing && !s.stunned) {
+          s.stunned = true;
+          s.stunTimer = stunDuration; // 設置暈眩時間
+          s.vx = 0; // 立即停止移動
+        }
+      }
+    }
+
+    // 繪製遊戲
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 繪製平台
+      for (let platform of platforms) {
+        ctx.fillStyle = platform.color;
+        ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+      }
+
+      // 繪製玩家殞影
+      for (let img of player.afterImages) {
+        ctx.fillStyle = `rgba(255, 152, 0, ${img.alpha})`;
+        ctx.font = '30px Arial';
+        ctx.fillText('😺', img.x, img.y + 30);
+      }
+
+      // 繪製玩家
+      ctx.fillStyle = player.invulnerable ? '#FFCA28' : '#FF9800';
+      ctx.font = '30px Arial';
+      ctx.fillText('😺', player.x, player.y + 30);
+
+      // 繪製耐力條
+      if (player.stamina < player.maxStamina || player.staminaFlash > 0) {
+        ctx.fillStyle = player.staminaFlash > 0 && Math.floor(player.staminaFlash / 5) % 2 === 0 ? '#FFFF00' : '#FFCA28';
+        ctx.fillRect(player.x, player.y - 10, (player.stamina / player.maxStamina) * 40, 5);
+        if (player.staminaFlash > 0) player.staminaFlash--;
+      }
+
+      // 繪製羊
+      for (let s of sheep) {
+        ctx.save();
+        ctx.fillStyle = s.asleep ? '#B0BEC5' : s.color;
+        ctx.font = '30px Arial';
+        if (s.stunned) {
+          ctx.translate(s.x + 15, s.y + 15); // 移到羊中心
+          ctx.rotate(Math.PI / 2); // 向右旋轉90度
+          ctx.fillText(s.asleep ? '😴' : '🐑', -15, 15); // 調整繪製位置
+        } else {
+          ctx.fillText(s.asleep ? '😴' : '🐑', s.x, s.y + 30);
+        }
+        ctx.restore();
+        if (s.type === 'multi' && !s.asleep) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '20px Arial';
+          ctx.fillText(s.health, s.x + 10, s.y);
+        }
+      }
+
+      // 繪製泡泡
+      for (let bubble of bubbles) {
+        ctx.fillStyle = '#00BCD4';
+        ctx.beginPath();
+        ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 繪製關卡資訊
+      ctx.fillStyle = '#000';
+      ctx.font = '20px Arial';
+      ctx.fillText(`關卡 ${level}`, 10, 30);
+      if (gameState === 'win') {
+        ctx.fillStyle = '#4CAF50';
+        ctx.font = '40px Arial';
+        ctx.fillText(level === 3 ? '遊戲通關！' : '關卡完成！按 R 進入下一關', 200, 300);
+      }
+    }
+
+    // 遊戲主循環
+    function gameLoop() {
+      if (gameState === 'win') {
+        if (keys.KeyR && level < 3) {
+          level++;
+          initLevel(level);
+        }
+        draw();
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      updatePlayer();
+      updateSheep();
+      updateBubbles();
+      draw();
+
+      // 檢查勝利條件
+      if (sheep.every(s => s.asleep)) {
+        gameState = 'win';
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // 啟動遊戲
+    gameLoop();
+  </script>
+</body>
+</html>
