@@ -1,0 +1,845 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>貓咪倖存者</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #222; }
+        canvas { border: 1px solid #fff; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600" tabindex="0"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 確保畫布獲得焦點
+        canvas.focus();
+
+        // 遊戲狀態
+        let gameState = {
+            paused: false,
+            gameOver: false,
+            levelUp: false,
+            levelUpTimer: 0,
+            wave: 1,
+            waveProgress: 0,
+            score: 0,
+            enemies: [],
+            expOrbs: [],
+            healthOrbs: [],
+            platforms: [],
+            talents: [],
+            eliteDefeated: false,
+        };
+
+        // 玩家對象
+        const player = {
+            x: 100,
+            y: 510,
+            width: 40,
+            height: 40,
+            vx: 0,
+            vy: 0,
+            health: 100,
+            maxHealth: 100,
+            stamina: 100,
+            maxStamina: 100,
+            exp: 0,
+            maxExp: 30,
+            level: 1,
+            attackCooldown: 0,
+            specialCooldown: 0,
+            dashCooldown: 0,
+            invulnerable: 0,
+            facingRight: true,
+            jumping: false,
+            dash: false,
+            chargeTime: 0,
+            wasInAir: false,
+            jumpKeyReleased: true,
+            shieldActive: false,
+            shieldDuration: 0,
+            talents: {
+                maxHealth: 0,
+                attackPower: 0,
+                attackSpeed: 0,
+                specialPower: 0,
+                specialSpeed: 0,
+                multiJump: 0,
+                impactWave: 0,
+                swordWave: 0,
+                laserCannon: 0,
+                whirlwind: 0,
+                energyShield: 0,
+                impactShot: 0,
+            },
+            extraJumps: 1,
+        };
+
+        // 鍵盤輸入
+        const keys = {};
+        document.addEventListener('keydown', e => {
+            console.log(`Key down: ${e.key}`);
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ' && !gameState.levelUp) gameState.paused = !gameState.paused;
+            if (gameState.levelUp && gameState.levelUpTimer <= 0 && ['z', 'x', 'c'].includes(e.key.toLowerCase())) {
+                selectTalent(['z', 'x', 'c'].indexOf(e.key.toLowerCase()));
+            }
+        });
+        document.addEventListener('keyup', e => {
+            console.log(`Key up: ${e.key}`);
+            keys[e.key.toLowerCase()] = false;
+            if (e.key.toLowerCase() === 'x') player.jumpKeyReleased = true;
+        });
+
+        // 滑鼠點擊選擇天賦
+        canvas.addEventListener('click', e => {
+            if (gameState.levelUp && gameState.levelUpTimer <= 0) {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                if (my >= 200 && my <= 300) {
+                    if (mx >= 50 && mx <= 250) selectTalent(0);
+                    else if (mx >= 300 && mx <= 500) selectTalent(1);
+                    else if (mx >= 550 && mx <= 750) selectTalent(2);
+                }
+            }
+        });
+
+        // 天賦選項
+        let talentOptions = [];
+        const talents = [
+            { name: '增加生命', effect: 'maxHealth', maxLevel: 5, value: 20, desc: '增加20最大生命值' },
+            { name: '攻擊力', effect: 'attackPower', maxLevel: 5, value: 5, desc: '近戰攻擊力+5' },
+            { name: '攻擊速度', effect: 'attackSpeed', maxLevel: 5, value: -0.05, desc: '攻擊間隔減少0.05秒' },
+            { name: '氣功彈威力', effect: 'specialPower', maxLevel: 5, value: 10, desc: '氣功彈傷害+10' },
+            { name: '氣功彈速度', effect: 'specialSpeed', maxLevel: 5, value: 2, desc: '氣功彈速度+2' },
+            { name: '多段跳', effect: 'multiJump', maxLevel: 2, value: 1, desc: '增加1次空中跳躍' },
+            { name: '衝擊波', effect: 'impactWave', maxLevel: 3, value: 10, desc: '落地造成10傷害衝擊波' },
+            { name: '劍氣斬', effect: 'swordWave', maxLevel: 1, value: 0, desc: '上+C發射劍氣(消耗10氣力)' },
+            { name: '雷射炮', effect: 'laserCannon', maxLevel: 1, value: 0, desc: '下+V發射雷射(消耗20氣力)' },
+            { name: '旋風斬', effect: 'whirlwind', maxLevel: 1, value: 0, desc: '左/右+C旋風攻擊(消耗15氣力)' },
+            { name: '能量護盾', effect: 'energyShield', maxLevel: 1, value: 0, desc: '上+V啟動護盾(消耗20氣力)' },
+            { name: '衝擊彈', effect: 'impactShot', maxLevel: 1, value: 0, desc: '左/右+V快速衝擊彈(消耗15氣力)' },
+        ];
+
+        // 敵人類型
+        const enemyTypes = [
+            { health: 20, speed: 2, width: 30, height: 30, damage: 10, score: 10, color: 'red', pattern: '🐺' },
+            { health: 50, speed: 1.5, width: 40, height: 40, damage: 20, score: 50, color: 'purple', pattern: '🐻', elite: true },
+        ];
+
+        // 地形
+        let platforms = [
+            { x: 0, y: 550, width: 800, height: 50, color: 'green' },
+            { x: 200, y: 400, width: 200, height: 20, color: 'brown' },
+            { x: 500, y: 300, width: 200, height: 20, color: 'brown' },
+        ];
+
+        // 攻擊和效果
+        let attacks = [];
+        let effects = [];
+
+        // 初始化第一波敵人
+        for (let i = 0; i < gameState.wave * 2; i++) {
+            gameState.enemies.push(createEnemy(false));
+        }
+
+        // 文字換行函數
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            let words = text.split('');
+            let line = '';
+            let lines = [];
+            ctx.font = '20px Arial';
+            for (let i = 0; i < words.length; i++) {
+                let testLine = line + words[i];
+                let metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && i > 0) {
+                    lines.push(line);
+                    line = words[i];
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line);
+            for (let i = 0; i < lines.length; i++) {
+                ctx.fillText(lines[i], x, y + i * lineHeight);
+            }
+        }
+
+        function update() {
+            // 總是更新天賦選擇計時器
+            if (gameState.levelUp && gameState.levelUpTimer > 0) {
+                gameState.levelUpTimer--;
+            }
+
+            // 在暫停、遊戲結束或天賦選擇時跳過主要更新
+            if (gameState.paused || gameState.gameOver || gameState.levelUp) return;
+
+            // 玩家移動
+            player.vx = 0;
+            if (keys['arrowleft']) { player.vx = -5; player.facingRight = false; }
+            if (keys['arrowright']) { player.vx = 5; player.facingRight = true; }
+            player.vy += 0.5;
+            player.x += player.vx;
+            player.y += player.vy;
+
+            // 邊界檢查
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+            // 地面和平台碰撞
+            let onGround = false;
+            platforms.forEach(p => {
+                if (player.vy >= 0 && player.x + player.width > p.x && player.x < p.x + p.width &&
+                    player.y + player.height > p.y && player.y + player.height < p.y + p.height + 10) {
+                    player.y = p.y - player.height;
+                    player.vy = 0;
+                    player.jumping = false;
+                    player.extraJumps = 1 + player.talents.multiJump;
+                    if (player.wasInAir && player.talents.impactWave > 0) {
+                        effects.push({ x: player.x + player.width / 2, y: player.y + player.height, radius: 0, maxRadius: 100, damage: player.talents.impactWave * 10, type: 'impact' });
+                    }
+                    onGround = true;
+                }
+            });
+            if (!onGround && player.y > canvas.height - player.height - 50) {
+                player.y = canvas.height - player.height - 50;
+                player.vy = 0;
+                player.jumping = false;
+                player.extraJumps = 1 + player.talents.multiJump;
+                if (player.wasInAir && player.talents.impactWave > 0) {
+                    effects.push({ x: player.x + player.width / 2, y: player.y + player.height, radius: 0, maxRadius: 100, damage: player.talents.impactWave * 10, type: 'impact' });
+                }
+                onGround = true;
+            }
+            player.wasInAir = !onGround;
+
+            // 衝刺
+            if (keys['z'] && player.dashCooldown <= 0 && player.stamina >= 10) {
+                player.dash = true;
+                player.dashCooldown = 0.5 * 60;
+                player.invulnerable = 0.3 * 60;
+                player.stamina -= 10;
+                effects.push({ x: player.x, y: player.y, width: player.width, height: player.height, lifetime: 15, type: 'dash', facingRight: player.facingRight });
+                player.vx = player.facingRight ? 15 : -15;
+            }
+            if (player.dash && player.dashCooldown % 5 === 0) {
+                effects.push({ x: player.x, y: player.y, width: player.width, height: player.height, lifetime: 15, type: 'dash', facingRight: player.facingRight });
+            }
+            if (player.dashCooldown <= 0) player.dash = false;
+            if (player.dashCooldown > 0) player.dashCooldown--;
+
+            // 跳躍
+            if (keys['x'] && !player.jumping && player.stamina >= 5) {
+                player.vy = -12;
+                player.jumping = true;
+                player.stamina -= 5;
+            } else if (keys['x'] && player.extraJumps > 0 && player.stamina >= 5 && player.jumpKeyReleased) {
+                player.vy = -12;
+                player.extraJumps--;
+                player.stamina -= 5;
+                player.jumpKeyReleased = false;
+            }
+
+            // 基本攻擊
+            if (keys['c'] && player.attackCooldown <= 0) {
+                const attackPower = 10 + player.talents.attackPower * 5;
+                attacks.push({ 
+                    x: player.x + (player.facingRight ? player.width : -40), 
+                    y: player.y, 
+                    width: 40, 
+                    height: 20, 
+                    damage: attackPower, 
+                    lifetime: 10, 
+                    type: 'slash' 
+                });
+                if (player.talents.swordWave && keys['arrowup'] && player.stamina >= 10) {
+                    attacks.push({ 
+                        x: player.x + (player.facingRight ? player.width : -60), 
+                        y: player.y - 5, 
+                        width: 60, 
+                        height: 30, 
+                        vx: player.facingRight ? 10 : -10, 
+                        damage: attackPower * 1.5, 
+                        lifetime: 60, 
+                        type: 'swordWave' 
+                    });
+                    player.stamina -= 10;
+                }
+                if (player.talents.whirlwind && (keys['arrowleft'] || keys['arrowright']) && player.stamina >= 15) {
+                    attacks.push({
+                        x: player.x + player.width / 2,
+                        y: player.y + player.height / 2,
+                        radius: 50,
+                        damage: 20,
+                        lifetime: 20,
+                        type: 'whirlwind'
+                    });
+                    player.stamina -= 15;
+                }
+                player.attackCooldown = Math.max(0.3 + player.talents.attackSpeed * 0.05, 0.1) * 60;
+            }
+            if (player.attackCooldown > 0) player.attackCooldown--;
+
+            // 特殊攻擊
+            if (keys['v'] && player.specialCooldown <= 0 && player.stamina >= 15) {
+                const specialPower = 20 + player.talents.specialPower * 10;
+                const specialSpeed = 5 + player.talents.specialSpeed * 2;
+                if (!keys['arrowup'] && !keys['arrowdown'] && !keys['arrowleft'] && !keys['arrowright']) {
+                    attacks.push({ 
+                        x: player.x + (player.facingRight ? player.width : -20), 
+                        y: player.y + 10, 
+                        width: 20, 
+                        height: 20, 
+                        vx: player.facingRight ? specialSpeed : -specialSpeed, 
+                        damage: specialPower * (1 + player.chargeTime / 60), 
+                        lifetime: 60, 
+                        type: 'energyBall' 
+                    });
+                    player.stamina -= 15;
+                }
+                if (player.talents.laserCannon && keys['arrowdown'] && player.stamina >= 20) {
+                    attacks.push({ 
+                        x: player.x + (player.facingRight ? player.width : -200), 
+                        y: player.y + 20, 
+                        width: 200, 
+                        height: 10, 
+                        damage: specialPower * 2, 
+                        lifetime: 10, 
+                        type: 'laser' 
+                    });
+                    player.stamina -= 20;
+                }
+                if (player.talents.energyShield && keys['arrowup'] && player.stamina >= 20) {
+                    player.shieldActive = true;
+                    player.shieldDuration = 2 * 60;
+                    player.invulnerable = player.shieldDuration;
+                    player.stamina -= 20;
+                }
+                if (player.talents.impactShot && (keys['arrowleft'] || keys['arrowright']) && player.stamina >= 15) {
+                    attacks.push({
+                        x: player.x + (player.facingRight ? player.width : -10),
+                        y: player.y + 20,
+                        radius: 10,
+                        vx: player.facingRight ? 15 : -15,
+                        damage: 30,
+                        lifetime: 60,
+                        type: 'impactShot'
+                    });
+                    player.stamina -= 15;
+                }
+                player.specialCooldown = 0.5 * 60;
+                player.chargeTime = 0;
+            } else if (keys['v'] && player.specialCooldown <= 0) {
+                player.chargeTime = Math.min(player.chargeTime + 1, 60);
+            }
+            if (player.specialCooldown > 0) player.specialCooldown--;
+
+            // 護盾更新
+            if (player.shieldActive) {
+                player.shieldDuration--;
+                if (player.shieldDuration <= 0) {
+                    player.shieldActive = false;
+                    player.invulnerable = 0; // 確保無敵時間重置
+                }
+            }
+
+            // 敵人更新
+            gameState.enemies.forEach(e => {
+                e.x += e.vx;
+                if (e.x < 0 || e.x > canvas.width - e.width) e.vx *= -1;
+                if (player.dash && collides(player, e)) {
+                    e.health -= 10;
+                    e.hitEffect = 10;
+                    player.stamina -= 5;
+                    effects.push({ x: e.x, y: e.y, width: e.width, height: e.height, lifetime: 10, type: 'hit' });
+                    if (e.health <= 0) {
+                        gameState.score += e.score;
+                        gameState.expOrbs.push({ x: e.x + e.width / 2, y: e.y, exp: e.score / 3 });
+                        if (Math.random() < 0.5) {
+                            gameState.healthOrbs.push({ x: e.x + e.width / 2, y: e.y, health: 20 });
+                        }
+                        if (e.elite) gameState.eliteDefeated = true;
+                    }
+                } else if (!player.invulnerable && collides(player, e)) {
+                    player.health = Math.max(player.health - e.damage, 0); // 防止血量負值
+                    console.log(`Player health after damage: ${player.health}`); // 除錯血量
+                    player.invulnerable = 0.5 * 60;
+                    if (player.health <= 0) {
+                        gameState.gameOver = true; // 強制觸發死亡
+                    }
+                }
+            });
+            gameState.enemies = gameState.enemies.filter(e => e.health > 0);
+
+            // 攻擊更新
+            attacks.forEach(a => {
+                if (a.vx) a.x += a.vx;
+                a.lifetime--;
+                gameState.enemies.forEach(e => {
+                    if ((a.radius && Math.hypot(e.x + e.width / 2 - a.x, e.y + e.height / 2 - a.y) < a.radius) ||
+                        (!a.radius && collides(a, e))) {
+                        e.health -= a.damage;
+                        e.hitEffect = 10;
+                        effects.push({ x: e.x, y: e.y, width: e.width, height: e.height, lifetime: 10, type: 'hit' });
+                        a.lifetime = 0;
+                        if (e.health <= 0) {
+                            gameState.score += e.score;
+                            gameState.expOrbs.push({ x: e.x + e.width / 2, y: e.y, exp: e.score / 3 });
+                            if (Math.random() < 0.5) {
+                                gameState.healthOrbs.push({ x: e.x + e.width / 2, y: e.y, health: 20 });
+                            }
+                            if (e.elite) gameState.eliteDefeated = true;
+                        }
+                    }
+                });
+            });
+            attacks = attacks.filter(a => a.lifetime > 0);
+
+            // 經驗光球
+            gameState.expOrbs.forEach(o => {
+                const dx = player.x + player.width / 2 - o.x;
+                const dy = player.y + player.height / 2 - o.y;
+                if (Math.hypot(dx, dy) < 50) {
+                    player.exp += o.exp;
+                    o.exp = 0;
+                    if (player.exp >= player.maxExp) {
+                        player.level++;
+                        player.exp -= player.maxExp;
+                        player.maxExp *= 1.1;
+                        gameState.levelUp = true;
+                        gameState.levelUpTimer = 60;
+                        generateTalentOptions();
+                    }
+                }
+            });
+            gameState.expOrbs = gameState.expOrbs.filter(o => o.exp > 0);
+
+            // 生命光球
+            gameState.healthOrbs.forEach(o => {
+                const dx = player.x + player.width / 2 - o.x;
+                const dy = player.y + player.height / 2 - o.y;
+                if (Math.hypot(dx, dy) < 50) {
+                    player.health = Math.min(player.health + o.health, player.maxHealth);
+                    o.health = 0;
+                }
+            });
+            gameState.healthOrbs = gameState.healthOrbs.filter(o => o.health > 0);
+
+            // 效果更新
+            effects.forEach(e => {
+                if (e.type === 'impact') {
+                    e.radius += 5;
+                    gameState.enemies.forEach(enemy => {
+                        if (Math.hypot(enemy.x + enemy.width / 2 - e.x, enemy.y + enemy.height / 2 - e.y) < e.radius) {
+                            enemy.health -= e.damage;
+                            enemy.hitEffect = 10;
+                            effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, lifetime: 10, type: 'hit' });
+                            if (enemy.health <= 0) {
+                                gameState.score += enemy.score;
+                                gameState.expOrbs.push({ x: enemy.x + enemy.width / 2, y: enemy.y, exp: enemy.score / 3 });
+                                if (Math.random() < 0.5) {
+                                    gameState.healthOrbs.push({ x: enemy.x + enemy.width / 2, y: enemy.y, health: 20 });
+                                }
+                                if (enemy.elite) gameState.eliteDefeated = true;
+                            }
+                        }
+                    });
+                }
+                e.lifetime--;
+            });
+            effects = effects.filter(e => e.lifetime > 0 || (e.type === 'impact' && e.radius < e.maxRadius));
+
+            // 敵人生成與遊戲結束
+            if (gameState.enemies.length === 0) {
+                if (gameState.wave >= 20) {
+                    gameState.score = Math.floor(gameState.score * 1.5);
+                    gameState.gameOver = true;
+                } else {
+                    gameState.waveProgress = 0;
+                    spawnWave();
+                    if (gameState.wave === 20) {
+                        // 第 20 波生成 5 隻菁英敵人（熊）
+                        for (let i = 0; i < 5; i++) {
+                            gameState.enemies.push(createEnemy(true));
+                        }
+                        gameState.eliteDefeated = false;
+                    } else if (gameState.wave % 5 === 0) {
+                        gameState.enemies.push(createEnemy(true));
+                        gameState.eliteDefeated = false;
+                    } else {
+                        for (let i = 0; i < gameState.wave * 2; i++) {
+                            gameState.enemies.push(createEnemy(false));
+                        }
+                    }
+                    if (gameState.eliteDefeated && gameState.wave % 5 !== 0) {
+                        platforms = [
+                            { x: 0, y: 550, width: 800, height: 50, color: 'green' },
+                            { x: Math.random() * 400, y: 400 - Math.random() * 100, width: 200, height: 20, color: 'brown' },
+                            { x: Math.random() * 400 + 400, y: 300 - Math.random() * 100, width: 200, height: 20, color: 'brown' },
+                        ];
+                    }
+                }
+            }
+            gameState.waveProgress = gameState.wave <= 20 ? 1 - gameState.enemies.length / (gameState.wave === 20 ? 5 : gameState.wave * 2) : 1;
+
+            // 恢復氣力
+            player.stamina = Math.min(player.stamina + 0.2, player.maxStamina);
+            if (player.invulnerable > 0 && !player.shieldActive) player.invulnerable--;
+        }
+
+        function spawnWave() {
+            if (gameState.wave < 20) gameState.wave++;
+        }
+
+        function createEnemy(elite = false) {
+            const type = elite ? enemyTypes[1] : enemyTypes[0];
+            return {
+                x: Math.random() * (canvas.width - type.width),
+                y: canvas.height - type.height - 50,
+                width: type.width,
+                height: type.height,
+                health: type.health,
+                vx: type.speed * (Math.random() > 0.5 ? 1 : -1),
+                damage: type.damage,
+                score: type.score,
+                color: type.color,
+                pattern: type.pattern,
+                elite: elite,
+                hitEffect: 0,
+            };
+        }
+
+        function collides(a, b) {
+            return a.x < b.x + b.width && a.x + (a.width || 20) > b.x &&
+                   a.y < b.y + b.height && a.y + (a.height || 20) > b.y;
+        }
+
+        function generateTalentOptions() {
+            talentOptions = [];
+            const available = talents.filter(t => !player.talents[t.effect] || player.talents[t.effect] < t.maxLevel);
+            while (talentOptions.length < 3 && available.length > 0) {
+                const idx = Math.floor(Math.random() * available.length);
+                talentOptions.push(available.splice(idx, 1)[0]);
+            }
+        }
+
+        function selectTalent(index) {
+            if (index < talentOptions.length) {
+                const talent = talentOptions[index];
+                player.talents[talent.effect] = (player.talents[talent.effect] || 0) + 1;
+                if (talent.effect === 'maxHealth') {
+                    player.maxHealth += talent.value;
+                    player.health += talent.value;
+                }
+                const existingTalent = gameState.talents.find(t => t.effect === talent.effect);
+                if (!existingTalent) {
+                    gameState.talents.push(talent);
+                }
+                gameState.levelUp = false;
+                gameState.levelUpTimer = 0;
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#222';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 繪製平台
+            platforms.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.width, p.height);
+            });
+
+            // 繪製玩家
+            ctx.save();
+            if (!player.facingRight) {
+                ctx.translate(player.x + player.width, player.y);
+                ctx.scale(-1, 1);
+                ctx.translate(-player.x, -player.y);
+            }
+            ctx.font = '40px Arial';
+            ctx.fillText('🐱', player.x, player.y + player.height);
+            if (player.shieldActive) {
+                ctx.globalAlpha = 0.5;
+                ctx.fillStyle = 'cyan';
+                ctx.beginPath();
+                ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 50, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            if (player.invulnerable % 4 < 2 && !player.shieldActive) ctx.globalAlpha = 0.5;
+
+            // 繪製敵人
+            gameState.enemies.forEach(e => {
+                ctx.save();
+                if (e.hitEffect > 0) {
+                    ctx.globalAlpha = 0.5;
+                    e.hitEffect--;
+                }
+                ctx.fillStyle = e.color;
+                ctx.font = '30px Arial';
+                ctx.fillText(e.pattern, e.x, e.y + e.height);
+                ctx.restore();
+            });
+
+            // 繪製攻擊
+            attacks.forEach(a => {
+                ctx.fillStyle = a.type === 'slash' ? 'white' : a.type === 'swordWave' ? 'yellow' : a.type === 'energyBall' ? 'blue' : a.type === 'laser' ? 'red' : a.type === 'whirlwind' ? 'gray' : 'purple';
+                if (a.type === 'slash') {
+                    ctx.save();
+                    if (!player.facingRight) {
+                        ctx.translate(a.x + a.width, a.y);
+                        ctx.scale(-1, 1);
+                        ctx.translate(-a.x, -a.y);
+                    }
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillRect(a.x, a.y, a.width, a.height);
+                    ctx.globalAlpha = 1;
+                    ctx.font = '30px Arial';
+                    ctx.fillText(')', a.x, a.y + a.height);
+                    ctx.restore();
+                } else if (a.type === 'swordWave') {
+                    ctx.save();
+                    if (!player.facingRight) {
+                        ctx.translate(a.x + a.width, a.y);
+                        ctx.scale(-1, 1);
+                        ctx.translate(-a.x, -a.y);
+                    }
+                    ctx.globalAlpha = 0.4;
+                    ctx.fillRect(a.x, a.y, a.width, a.height);
+                    ctx.globalAlpha = 1;
+                    ctx.font = '30px Arial';
+                    ctx.fillText('==>', a.x, a.y + a.height);
+                    ctx.restore();
+                } else if (a.type === 'laser') {
+                    ctx.save();
+                    if (!player.facingRight) {
+                        ctx.translate(a.x + a.width, a.y);
+                        ctx.scale(-1, 1);
+                        ctx.translate(-a.x, -a.y);
+                    }
+                    ctx.globalAlpha = 0.4;
+                    ctx.fillRect(a.x, a.y, a.width, a.height);
+                    ctx.globalAlpha = 1;
+                    ctx.font = '30px Arial';
+                    ctx.fillText('===', a.x, a.y + a.height);
+                    ctx.restore();
+                } else if (a.type === 'whirlwind') {
+                    ctx.globalAlpha = 0.3;
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                } else if (a.type === 'impactShot') {
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(a.x, a.y, a.width || 20, a.height || 20);
+                }
+            });
+
+            // 繪製經驗光球
+            gameState.expOrbs.forEach(o => {
+                ctx.fillStyle = 'yellow';
+                ctx.beginPath();
+                ctx.arc(o.x, o.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 繪製生命光球
+            gameState.healthOrbs.forEach(o => {
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(o.x, o.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 繪製效果
+            effects.forEach(e => {
+                if (e.type === 'dash') {
+                    ctx.globalAlpha = 0.3;
+                    ctx.save();
+                    if (!e.facingRight) {
+                        ctx.translate(e.x + e.width, e.y);
+                        ctx.scale(-1, 1);
+                        ctx.translate(-e.x, -e.y);
+                    }
+                    ctx.font = '40px Arial';
+                    ctx.fillText('🐱', e.x, e.y + e.height);
+                    ctx.restore();
+                    ctx.globalAlpha = 1;
+                } else if (e.type === 'impact') {
+                    ctx.globalAlpha = 0.5;
+                    ctx.fillStyle = 'orange';
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                } else if (e.type === 'hit') {
+                    ctx.globalAlpha = 0.5;
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(e.x, e.y, e.width, e.height);
+                    ctx.globalAlpha = 1;
+                }
+            });
+
+            // 介面
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`等級: ${player.level}`, 10, 30);
+            ctx.fillText(`得分: ${gameState.score}`, canvas.width / 2 - 50, 30);
+            ctx.fillText(`波數: ${gameState.wave}/20`, canvas.width / 2 - 50, 60);
+            if (gameState.wave === 20) {
+                ctx.fillText('最終波數：擊敗所有菁英敵人！', canvas.width / 2 - 100, 100);
+            }
+            ctx.fillStyle = 'gray';
+            ctx.fillRect(canvas.width / 2 - 50, 80, 100, 10);
+            ctx.fillStyle = 'white';
+            ctx.fillRect(canvas.width / 2 - 50, 80, gameState.waveProgress * 100, 10);
+
+            // 狀態條
+            ctx.fillStyle = 'red';
+            ctx.fillRect(10, 40, Math.max(player.health, 0), 10); // 確保血量顯示不為負
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(10, 60, player.stamina, 10);
+            ctx.fillStyle = 'yellow';
+            ctx.fillRect(10, 80, (player.exp / player.maxExp) * 100, 10);
+
+            // 天賦列表
+            ctx.textAlign = 'right';
+            talents.forEach((t, i) => {
+                if (player.talents[t.effect] > 0) {
+                    ctx.fillText(`${t.name} (等級 ${player.talents[t.effect]})`, canvas.width - 10, 30 + i * 30);
+                }
+            });
+            ctx.textAlign = 'left';
+
+            // 操作說明
+            ctx.fillText('方向鍵: 移動, Z: 衝刺, X: 跳躍, C: 攻擊, V: 特殊, 空白鍵: 暫停', 10, canvas.height - 10);
+
+            // 暫停畫面
+            if (gameState.paused) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('遊戲暫停', canvas.width / 2, 100);
+                ctx.font = '20px Arial';
+                ctx.fillText(`等級: ${player.level}, 生命: ${player.health}/${player.maxHealth}, 氣力: ${Math.floor(player.stamina)}/${player.maxStamina}`, canvas.width / 2, 150);
+                ctx.fillText(`天賦:`, canvas.width / 2, 200);
+                talents.forEach((t, i) => {
+                    if (player.talents[t.effect] > 0) {
+                        ctx.fillText(`${t.name} (等級 ${player.talents[t.effect]}): ${t.desc}`, canvas.width / 2, 230 + i * 30);
+                    }
+                });
+                ctx.fillText('按空白鍵繼續', canvas.width / 2, canvas.height - 50);
+            }
+
+            // 升級畫面
+            if (gameState.levelUp) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('選擇天賦', canvas.width / 2, 100);
+                ctx.font = '20px Arial';
+                talentOptions.forEach((t, i) => {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.fillRect(50 + i * 250, 200, 200, 100);
+                    ctx.fillStyle = 'white';
+                    ctx.fillText(t.name, 150 + i * 250, 230);
+                    wrapText(t.desc, 150 + i * 250, 250, 180, 20);
+                    if (gameState.levelUpTimer <= 0) {
+                        ctx.fillText(`按 ${['Z', 'X', 'C'][i]} 選擇`, 150 + i * 250, 290);
+                    }
+                });
+            }
+
+            // 遊戲結束
+            if (gameState.gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                const rank = getRank(gameState.score);
+                if (gameState.wave >= 20) {
+                    ctx.fillText('挑戰成功！', canvas.width / 2, canvas.height / 2 - 40);
+                    ctx.fillText(`最終得分: ${gameState.score} (含1.5倍加成)`, canvas.width / 2, canvas.height / 2);
+                    ctx.fillText(`評價: ${rank}`, canvas.width / 2, canvas.height / 2 + 40);
+                } else {
+                    ctx.fillText(`遊戲結束！評價: ${rank}`, canvas.width / 2, canvas.height / 2);
+                    ctx.fillText(`得分: ${gameState.score}`, canvas.width / 2, canvas.height / 2 + 40);
+                }
+            }
+
+            ctx.globalAlpha = 1;
+        }
+
+        function getRank(score) {
+            if (score >= 5000) return 'SSS';
+            if (score >= 4000) return 'SS';
+            if (score >= 3000) return 'S';
+            if (score >= 2000) return 'A';
+            if (score >= 1000) return 'B';
+            if (score >= 500) return 'C';
+            if (score >= 200) return 'D';
+            return 'E';
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
