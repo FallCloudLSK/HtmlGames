@@ -74,6 +74,11 @@
       display: flex;
       gap: 10px;
     }
+    #author {
+      margin-top: 10px;
+      font-size: 16px;
+      color: #666;
+    }
     button {
       padding: 10px 20px;
       font-size: 16px;
@@ -143,6 +148,7 @@
     <button id="rules" onclick="showRules()">規則說明</button>
     <button id="restart" onclick="resetToModeSelection()">重新開始</button>
   </div>
+  <div id="author">2020 by FallCloud</div>
   <div id="overlay"></div>
   <div id="rules-panel">
     <h2>新冠肺炎棋規則</h2>
@@ -159,6 +165,7 @@
     <p><strong>5. 遊戲結束與計分</strong></p>
     <p>- 遊戲於盤面填滿或紅方無可落子點時結束。<br>
        - 每顆棋計1分，總得分高者勝，相同則平局。</p>
+    <p><strong>作者</strong>: 2020 by FallCloud</p>
     <button onclick="hideRules()">關閉</button>
   </div>
   <script>
@@ -260,22 +267,22 @@
       return blackCells.some(([br, bc]) => br === r && bc === c);
     }
 
-    function getValidRedMoves() {
+    function getValidRedMoves(tempBoard = board) {
       const moves = [];
       const flipMoves = [];
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) {
-          if (board[r][c] !== null || isBlackCell(r, c)) continue;
+          if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
           let canFlip = false;
           for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
               if (dr === 0 && dc === 0) continue;
               const nr = r + dr, nc = c + dc;
-              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'red') {
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
                 let flipped = [];
                 [[0,1], [0,-1], [1,0], [-1,0]].forEach(([ddr, ddc]) => {
                   const nnr = r + ddr, nnc = c + ddc;
-                  if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && board[nnr][nnc] === 'white') {
+                  if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && tempBoard[nnr][nnc] === 'white') {
                     flipped.push([nnr, nnc]);
                   }
                 });
@@ -292,7 +299,7 @@
               for (let dc = -1; dc <= 1; dc++) {
                 if (dr === 0 && dc === 0) continue;
                 const nr = r + dr, nc = c + dc;
-                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'red') {
+                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
                   moves.push({ r, c, flipped: [] });
                   break;
                 }
@@ -304,21 +311,21 @@
       return flipMoves.length > 0 ? flipMoves : moves;
     }
 
-    function getValidWhiteMoves() {
+    function getValidWhiteMoves(tempBoard = board) {
       const moves = [];
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) {
-          if (board[r][c] !== null || isBlackCell(r, c)) continue;
+          if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
           let flipped = [];
           [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]].forEach(([dr, dc]) => {
             let nr = r + dr, nc = c + dc;
             let line = [];
-            while (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'red') {
+            while (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
               line.push([nr, nc]);
               nr += dr;
               nc += dc;
             }
-            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'white') {
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white') {
               flipped.push(...line);
             }
           });
@@ -327,7 +334,7 @@
           }
           for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
             const nr = r + dr, nc = c + dc;
-            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'white') {
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white') {
               if (!moves.some(m => m.r === r && m.c === c)) {
                 moves.push({ r, c, flipped: [] });
               }
