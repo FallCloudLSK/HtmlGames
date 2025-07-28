@@ -1,0 +1,503 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>新冠肺炎棋</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+    h1 {
+      font-size: 28px;
+      color: #333;
+      margin: 10px 0;
+    }
+    canvas {
+      border: 2px solid #333;
+      background-color: #fff;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 20px;
+      color: #333;
+    }
+    #score {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #333;
+    }
+    #mode-selection, #game-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #rules-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border: 2px solid #333;
+      border-radius: 10px;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    #rules-panel h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    #rules-panel p {
+      margin: 10px 0;
+      line-height: 1.5;
+    }
+    #rules-panel button {
+      background-color: #ff4444;
+      margin-top: 10px;
+    }
+    #rules-panel button:hover {
+      background-color: #cc0000;
+    }
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <h1>新冠肺炎棋</h1>
+  <canvas id="board" width="350" height="350"></canvas>
+  <div id="status">請選擇遊戲模式</div>
+  <div id="score">紅方: 0 | 白方: 0</div>
+  <div id="mode-selection">
+    <button onclick="startGame('red')">扮演病毒（紅方）</button>
+    <button onclick="startGame('white')">扮演醫護（白方）</button>
+    <button onclick="startGame('two-player')">雙人遊戲</button>
+  </div>
+  <div id="game-controls" style="display: none;">
+    <button id="rules" onclick="showRules()">規則說明</button>
+    <button id="restart" onclick="resetToModeSelection()">重新開始</button>
+  </div>
+  <div id="overlay"></div>
+  <div id="rules-panel">
+    <h2>新冠肺炎棋規則</h2>
+    <p><strong>1. 遊戲流程</strong></p>
+    <p>紅方（病毒）先行，白方（醫護）後手，輪流落子至盤面填滿。若紅方無可落子點，遊戲結束，白方填滿剩餘盤面。</p>
+    <p><strong>2. 紅方（病毒）步法 - 擴散</strong></p>
+    <p>紅方可落子於現有紅棋周圍八格的空白處，落子後觸發「感染」，將相鄰四格（上下左右）的白棋翻為紅棋。紅方必須優先選擇可感染白棋的點。</p>
+    <p><strong>3. 白方（醫護）步法</strong></p>
+    <p>- <strong>救治</strong>：依黑白棋規則落子，翻轉夾住的紅棋為白棋（沿八個方向）。<br>
+       - <strong>支援</strong>：落子於現有白棋相鄰四格（上下左右）的空白處，無翻轉效果。</p>
+    <p><strong>4. 棋盤設定</strong></p>
+    <p>棋盤為7x7格，包含13個黑格（不可落子）：正中央1格、四角各3格（邊角及相鄰2格）。<br>
+       初始棋子：紅棋在(3,3)和(5,5)，白棋在(3,5)和(5,3)。</p>
+    <p><strong>5. 遊戲結束與計分</strong></p>
+    <p>- 遊戲於盤面填滿或紅方無可落子點時結束。<br>
+       - 每顆棋計1分，總得分高者勝，相同則平局。</p>
+    <button onclick="hideRules()">關閉</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const statusDiv = document.getElementById('status');
+    const scoreDiv = document.getElementById('score');
+    const modeSelection = document.getElementById('mode-selection');
+    const gameControls = document.getElementById('game-controls');
+    const rulesPanel = document.getElementById('rules-panel');
+    const overlay = document.getElementById('overlay');
+    const cellSize = 50;
+    const boardSize = 7;
+    let board = [];
+    let currentPlayer = 'red';
+    let gameOver = false;
+    let gameMode = null; // 'red' (玩家紅方), 'white' (玩家白方), 'two-player' (雙人)
+    let aiPlayer = null; // 'red' 或 'white' 或 null
+
+    // 黑格位置：正中央 (3,3)，四角各3格
+    const blackCells = [
+      [0,0], [0,1], [1,0], // 左上
+      [0,5], [0,6], [1,6], // 右上
+      [5,0], [6,0], [6,1], // 左下
+      [5,6], [6,5], [6,6], // 右下
+      [3,3] // 中央
+    ];
+
+    // 位置權重：中心格子分數高，邊緣低
+    const positionWeights = [
+      [1, 1, 2, 2, 2, 1, 1],
+      [1, 3, 3, 3, 3, 3, 1],
+      [2, 3, 4, 4, 4, 3, 2],
+      [2, 3, 4, 0, 4, 3, 2], // 中央(3,3)為黑格，權重為0
+      [2, 3, 4, 4, 4, 3, 2],
+      [1, 3, 3, 3, 3, 3, 1],
+      [1, 1, 2, 2, 2, 1, 1]
+    ];
+
+    function initBoard() {
+      board = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+      blackCells.forEach(([r, c]) => board[r][c] = 'black');
+      board[2][2] = 'red';   // 3-3
+      board[4][4] = 'red';   // 5-5
+      board[2][4] = 'white'; // 3-5
+      board[4][2] = 'white'; // 5-3
+    }
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!gameOver && gameMode && (currentPlayer !== aiPlayer || gameMode === 'two-player')) {
+        const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+        const moveMap = new Map();
+        validMoves.forEach(move => {
+          const key = `${move.r},${move.c}`;
+          if (currentPlayer === 'white' && moveMap.has(key) && move.flipped.length > 0) {
+            moveMap.set(key, 'rgba(0, 0, 255, 0.3)'); // 優先顯示救治（藍色）
+          } else if (!moveMap.has(key)) {
+            const color = currentPlayer === 'red' ? 'rgba(255, 0, 0, 0.3)' : // 紅方：半透明紅色
+                          move.flipped.length > 0 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(0, 255, 0, 0.3)'; // 白方：救治藍色，支援綠色
+            moveMap.set(key, color);
+          }
+        });
+        moveMap.forEach((color, key) => {
+          const [r, c] = key.split(',').map(Number);
+          const x = c * cellSize;
+          const y = r * cellSize;
+          ctx.fillStyle = color;
+          ctx.fillRect(x, y, cellSize, cellSize);
+        });
+      }
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          const x = c * cellSize;
+          const y = r * cellSize;
+          ctx.strokeStyle = '#333';
+          ctx.strokeRect(x, y, cellSize, cellSize);
+          if (board[r][c] === 'black') {
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x, y, cellSize, cellSize);
+          } else if (board[r][c] === 'red') {
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (board[r][c] === 'white') {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    function isBlackCell(r, c) {
+      return blackCells.some(([br, bc]) => br === r && bc === c);
+    }
+
+    function getValidRedMoves() {
+      const moves = [];
+      const flipMoves = [];
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (board[r][c] !== null || isBlackCell(r, c)) continue;
+          let canFlip = false;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              const nr = r + dr, nc = c + dc;
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'red') {
+                let flipped = [];
+                [[0,1], [0,-1], [1,0], [-1,0]].forEach(([ddr, ddc]) => {
+                  const nnr = r + ddr, nnc = c + ddc;
+                  if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && board[nnr][nnc] === 'white') {
+                    flipped.push([nnr, nnc]);
+                  }
+                });
+                if (flipped.length > 0) {
+                  flipMoves.push({ r, c, flipped });
+                  canFlip = true;
+                }
+                break;
+              }
+            }
+          }
+          if (!canFlip) {
+            for (let dr = -1; dr <= 1; dr++) {
+              for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'red') {
+                  moves.push({ r, c, flipped: [] });
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      return flipMoves.length > 0 ? flipMoves : moves;
+    }
+
+    function getValidWhiteMoves() {
+      const moves = [];
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (board[r][c] !== null || isBlackCell(r, c)) continue;
+          let flipped = [];
+          [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]].forEach(([dr, dc]) => {
+            let nr = r + dr, nc = c + dc;
+            let line = [];
+            while (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'red') {
+              line.push([nr, nc]);
+              nr += dr;
+              nc += dc;
+            }
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'white') {
+              flipped.push(...line);
+            }
+          });
+          if (flipped.length > 0) {
+            moves.push({ r, c, flipped });
+          }
+          for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && board[nr][nc] === 'white') {
+              if (!moves.some(m => m.r === r && m.c === c)) {
+                moves.push({ r, c, flipped: [] });
+              }
+              break;
+            }
+          }
+        }
+      }
+      return moves;
+    }
+
+    function makeMove(r, c, flipped, player) {
+      board[r][c] = player;
+      flipped.forEach(([fr, fc]) => board[fr][fc] = player);
+      currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
+      updateStatus();
+      drawBoard();
+      checkGameOver();
+      if (!gameOver && gameMode !== 'two-player' && currentPlayer === aiPlayer) {
+        setTimeout(makeAIMove, 500);
+      }
+    }
+
+    function evaluateMove(move, player) {
+      let score = 0;
+      // 1. 翻轉得分
+      score += move.flipped.length * 2 + 1; // 翻轉棋子數 * 2 + 落子本身
+      // 2. 位置權重
+      score += positionWeights[move.r][move.c];
+      // 3. 穩定性（靠近黑格的格子更穩定）
+      let stability = 0;
+      [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
+        const nr = move.r + dr, nc = move.c + dc;
+        if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && isBlackCell(nr, nc)) {
+          stability += 2;
+        }
+      });
+      score += stability;
+      // 4. 未來可走性（減少對手可走步數）
+      const tempBoard = board.map(row => row.slice());
+      tempBoard[move.r][move.c] = player;
+      move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
+      const opponent = player === 'red' ? 'white' : 'red';
+      const opponentMoves = opponent === 'red' ? getValidRedMoves(tempBoard) : getValidWhiteMoves(tempBoard);
+      score -= opponentMoves.length * 0.5; // 減少對手機會
+      return score;
+    }
+
+    function makeAIMove() {
+      if (gameOver) return;
+      const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+      if (validMoves.length === 0) {
+        currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
+        updateStatus();
+        checkGameOver();
+        return;
+      }
+      let bestMove = validMoves[0];
+      let bestScore = evaluateMove(bestMove, currentPlayer);
+      for (let i = 1; i < validMoves.length; i++) {
+        const score = evaluateMove(validMoves[i], currentPlayer);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = validMoves[i];
+        }
+      }
+      makeMove(bestMove.r, bestMove.c, bestMove.flipped, currentPlayer);
+    }
+
+    function updateStatus() {
+      if (gameOver) return;
+      const redMoves = getValidRedMoves();
+      if (currentPlayer === 'red' && redMoves.length === 0) {
+        currentPlayer = 'white';
+        statusDiv.textContent = '紅方無可落棋點，白方繼續填滿盤面';
+      } else {
+        statusDiv.textContent = currentPlayer === 'red' ? '紅方（病毒）回合' : '白方（醫護）回合';
+      }
+      updateScore();
+    }
+
+    function updateScore() {
+      let redScore = 0, whiteScore = 0;
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (board[r][c] === 'red') redScore++;
+          else if (board[r][c] === 'white') whiteScore++;
+        }
+      }
+      scoreDiv.textContent = `紅方: ${redScore} | 白方: ${whiteScore}`;
+    }
+
+    function checkGameOver() {
+      let emptyCells = 0;
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (board[r][c] === null && !isBlackCell(r, c)) emptyCells++;
+        }
+      }
+      if (emptyCells === 0 || (currentPlayer === 'red' && getValidRedMoves().length === 0)) {
+        gameOver = true;
+        let redScore = 0, whiteScore = 0;
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (board[r][c] === 'red') redScore++;
+            else if (board[r][c] === 'white') whiteScore++;
+          }
+        }
+        let result = redScore > whiteScore ? '紅方（病毒）獲勝！' : redScore < whiteScore ? '白方（醫護）獲勝！' : '平局！';
+        statusDiv.textContent = `遊戲結束！${result}`;
+        scoreDiv.textContent = `最終得分 - 紅方: ${redScore} | 白方: ${whiteScore}`;
+      }
+    }
+
+    function showRules() {
+      rulesPanel.style.display = 'block';
+      overlay.style.display = 'block';
+    }
+
+    function hideRules() {
+      rulesPanel.style.display = 'none';
+      overlay.style.display = 'none';
+    }
+
+    function startGame(mode) {
+      gameMode = mode;
+      aiPlayer = mode === 'red' ? 'white' : mode === 'white' ? 'red' : null;
+      modeSelection.style.display = 'none';
+      gameControls.style.display = 'flex';
+      initGame();
+      if (gameMode === 'white' && currentPlayer === 'red') {
+        setTimeout(makeAIMove, 500);
+      }
+    }
+
+    function resetToModeSelection() {
+      gameMode = null;
+      aiPlayer = null;
+      gameOver = false;
+      modeSelection.style.display = 'flex';
+      gameControls.style.display = 'none';
+      statusDiv.textContent = '請選擇遊戲模式';
+      initBoard();
+      updateScore();
+      drawBoard();
+    }
+
+    function initGame() {
+      initBoard();
+      currentPlayer = 'red';
+      gameOver = false;
+      updateStatus();
+      drawBoard();
+    }
+
+    canvas.addEventListener('click', (e) => {
+      if (gameOver || gameMode === null || (currentPlayer === aiPlayer && gameMode !== 'two-player')) return;
+      const rect = canvas.getBoundingClientRect();
+      const r = Math.floor((e.clientY - rect.top) / cellSize);
+      const c = Math.floor((e.clientX - rect.left) / cellSize);
+      if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) return;
+      const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+      const move = validMoves.find(m => m.r === r && m.c === c);
+      if (move) {
+        makeMove(r, c, move.flipped, currentPlayer);
+      }
+    });
+
+    initBoard();
+    drawBoard();
+  </script>
+</body>
+</html>
