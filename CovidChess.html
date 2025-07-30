@@ -155,18 +155,18 @@
     <p><strong>1. 遊戲流程</strong></p>
     <p>紅方（病毒）先行，白方（醫護）後手，輪流行動至盤面填滿。若一方無可行動點，則由另一方繼續下棋，直到盤面填滿或雙方均無可行動點。</p>
     <p><strong>2. 紅方（病毒）步法</strong></p>
-    <p>- <strong>擴散</strong>：落子於現有紅棋周圍八格的空白處，落子後觸發「感染」，將相鄰四格（上下左右）的白棋翻為紅棋。<br>
-       - <strong>接觸</strong>：直接將現有紅棋相鄰四格（上下左右）的白棋翻為特殊紅棋（顯示為半透明紫色），每局僅可使用一次。特殊紅棋不可被白方翻轉，且阻斷白方救治連線。<br>
+    <p>- <strong>擴散</strong>：落子於現有紅棋或重症紅棋周圍八格的空白處，落子後觸發「感染」，將相鄰四格（上下左右）的白棋翻為普通紅棋。<br>
+       - <strong>接觸</strong>：直接將現有紅棋相鄰四格（上下左右）的白棋翻為重症紅棋（顯示為深紅色棋子並加粗黑圈），每局僅可使用一次。重症紅棋不可被白方翻轉，且阻斷白方救治連線。<br>
        - 紅方必須優先選擇可感染白棋的擴散或接觸步法（若未使用，優先級相同）；若兩者均無，則可選擇無感染效果的擴散。</p>
     <p><strong>3. 白方（醫護）步法</strong></p>
-    <p>- <strong>救治</strong>：依黑白棋規則落子，翻轉夾住的紅棋為白棋（沿八個方向，特殊紅棋阻斷連線且不可翻轉）。<br>
+    <p>- <strong>救治</strong>：依黑白棋規則落子，翻轉夾住的普通紅棋為白棋（沿八個方向，重症紅棋阻斷連線且不可翻轉）。<br>
        - <strong>支援</strong>：落子於現有白棋相鄰四格（上下左右）的空白處，無翻轉效果。</p>
     <p><strong>4. 棋盤設定</strong></p>
     <p>棋盤為7x7格，包含13個黑格（不可落子）：正中央1格、四角各3格（邊角及相鄰2格）。<br>
        初始棋子：紅棋在(3,3)和(5,5)，白棋在(3,5)和(5,3)。</p>
     <p><strong>5. 遊戲結束與計分</strong></p>
     <p>- 遊戲於盤面填滿或雙方均無可行動點時結束。<br>
-       - 每顆棋（含特殊紅棋）計1分，總得分高者勝，相同則平局。</p>
+       - 每顆棋（含重症紅棋）計1分，總得分高者勝，相同則平局。</p>
     <p>2020 by FallCloud</p>
     <button onclick="hideRules()">關閉</button>
   </div>
@@ -259,10 +259,14 @@
             ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
             ctx.fill();
           } else if (board[r][c] === 'special_red') {
-            ctx.fillStyle = 'rgba(128, 0, 128, 0.3)'; // 特殊紅棋：半透明紫色
+            ctx.fillStyle = '#8B0000'; // 重症紅棋：深紅色
             ctx.beginPath();
             ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
             ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3; // 加粗黑圈
+            ctx.stroke();
+            ctx.lineWidth = 1; // 重置線條寬度
           } else if (board[r][c] === 'white') {
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
@@ -288,7 +292,7 @@
           if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
           let flipped = [];
           let adjacentRed = false;
-          // 檢查是否與紅棋八格相鄰
+          // 檢查是否與紅棋或重症紅棋八格相鄰
           for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
               if (dr === 0 && dc === 0) continue;
@@ -323,7 +327,7 @@
             if (tempBoard[r][c] !== 'white') continue;
             for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
               const nr = r + dr, nc = c + dc;
-              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && (tempBoard[nr][nc] === 'red' || tempBoard[nr][nc] === 'special_red')) {
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
                 priorityMoves.push({ r, c, flipped: [[r, c]], type: 'contact' });
                 break;
               }
@@ -337,7 +341,7 @@
 
     function getValidWhiteMoves(tempBoard = board) {
       const moves = [];
-      // 1. 檢查救治步法（黑白棋規則，特殊紅棋阻斷）
+      // 1. 檢查救治步法（黑白棋規則，重症紅棋阻斷）
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) {
           if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
@@ -379,7 +383,7 @@
 
     function makeMove(r, c, flipped, player, moveType) {
       if (moveType === 'contact') {
-        // 接觸：翻轉白棋為特殊紅棋並標記已使用
+        // 接觸：翻轉白棋為重症紅棋並標記已使用
         board[r][c] = 'special_red';
         contactUsed = true;
       } else {
