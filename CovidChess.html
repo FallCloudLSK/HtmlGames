@@ -155,18 +155,18 @@
     <p><strong>1. 遊戲流程</strong></p>
     <p>紅方（病毒）先行，白方（醫護）後手，輪流行動至盤面填滿。若一方無可行動點，則由另一方繼續下棋，直到盤面填滿或雙方均無可行動點。</p>
     <p><strong>2. 紅方（病毒）步法</strong></p>
-    <p>- <strong>擴散</strong>：落子於現有紅棋或重症紅棋周圍八格的空白處，落子後觸發「感染」，將相鄰四格（上下左右）的白棋翻為普通紅棋。<br>
-       - <strong>接觸</strong>：直接將現有紅棋相鄰四格（上下左右）的白棋翻為重症紅棋（顯示為深紅色棋子並加粗黑圈），每局僅可使用一次。重症紅棋不可被白方翻轉，且阻斷白方救治連線。<br>
-       - 紅方必須優先選擇可感染白棋的擴散或接觸步法（若未使用，優先級相同）；若兩者均無，則可選擇無感染效果的擴散。</p>
+    <p>- <strong>擴散</strong>：落子於現有紅棋或變異紅棋周圍八格的空白處，落子後觸發「感染」，將相鄰四格（上下左右）的白棋翻為普通紅棋。<br>
+       - <strong>變異</strong>：選擇一顆現有紅棋，將其變為變異紅棋（顯示為深紅色棋子並加粗黑圈），同時將相鄰四格（上下左右）的紅棋和白棋變為變異紅棋，每局僅可使用一次。變異紅棋不可被白方翻轉，且阻斷白方救治連線。<br>
+       - 紅方必須優先選擇可感染白棋的擴散或變異步法（若未使用，優先級相同）；若兩者均無，則可選擇無感染效果的擴散或變異。</p>
     <p><strong>3. 白方（醫護）步法</strong></p>
-    <p>- <strong>救治</strong>：依黑白棋規則落子，翻轉夾住的普通紅棋為白棋（沿八個方向，重症紅棋阻斷連線且不可翻轉）。<br>
+    <p>- <strong>救治</strong>：依黑白棋規則落子，翻轉夾住的普通紅棋為白棋（沿八個方向，變異紅棋阻斷連線且不可翻轉）。<br>
        - <strong>支援</strong>：落子於現有白棋相鄰四格（上下左右）的空白處，無翻轉效果。</p>
     <p><strong>4. 棋盤設定</strong></p>
     <p>棋盤為7x7格，包含13個黑格（不可落子）：正中央1格、四角各3格（邊角及相鄰2格）。<br>
        初始棋子：紅棋在(3,3)和(5,5)，白棋在(3,5)和(5,3)。</p>
     <p><strong>5. 遊戲結束與計分</strong></p>
     <p>- 遊戲於盤面填滿或雙方均無可行動點時結束。<br>
-       - 每顆棋（含重症紅棋）計1分，總得分高者勝，相同則平局。</p>
+       - 每顆棋（含變異紅棋）計1分，總得分高者勝，相同則平局。</p>
     <p>2020 by FallCloud</p>
     <button onclick="hideRules()">關閉</button>
   </div>
@@ -186,7 +186,7 @@
     let gameOver = false;
     let gameMode = null; // 'red' (玩家紅方), 'white' (玩家白方), 'two-player' (雙人)
     let aiPlayer = null; // 'red' 或 'white' 或 null
-    let contactUsed = false; // 追蹤接觸步法是否已使用
+    let mutationUsed = false; // 追蹤變異步法是否已使用
 
     // 黑格位置：正中央 (3,3)，四角各3格
     const blackCells = [
@@ -215,7 +215,7 @@
       board[4][4] = 'red';   // 5-5
       board[2][4] = 'white'; // 3-5
       board[4][2] = 'white'; // 5-3
-      contactUsed = false; // 重置接觸步法使用狀態
+      mutationUsed = false; // 重置變異步法使用狀態
     }
 
     function drawBoard() {
@@ -230,7 +230,7 @@
             moveMap.set(key, 'rgba(0, 0, 255, 0.3)'); // 優先顯示救治（藍色）
           } else if (!moveMap.has(key)) {
             const color = currentPlayer === 'red' ?
-                          (move.type === 'spread' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(128, 0, 128, 0.3)') : // 紅方：擴散紅色，接觸紫色
+                          (move.type === 'spread' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(128, 0, 128, 0.3)') : // 紅方：擴散紅色，變異紫色
                           move.flipped.length > 0 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(0, 255, 0, 0.3)'; // 白方：救治藍色，支援綠色
             moveMap.set(key, color);
           }
@@ -259,7 +259,7 @@
             ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
             ctx.fill();
           } else if (board[r][c] === 'special_red') {
-            ctx.fillStyle = '#8B0000'; // 重症紅棋：深紅色
+            ctx.fillStyle = '#8B0000'; // 變異紅棋：深紅色
             ctx.beginPath();
             ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
             ctx.fill();
@@ -284,15 +284,15 @@
     }
 
     function getValidRedMoves(tempBoard = board) {
-      const priorityMoves = []; // 可感染白棋的擴散或接觸步法
-      const nonFlippingSpreadMoves = []; // 無感染效果的擴散步法
+      const priorityMoves = []; // 可感染白棋的擴散或變異步法
+      const nonFlippingMoves = []; // 無感染效果的擴散或變異步法
       // 1. 檢查擴散步法
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) {
           if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
           let flipped = [];
           let adjacentRed = false;
-          // 檢查是否與紅棋或重症紅棋八格相鄰
+          // 檢查是否與紅棋或變異紅棋八格相鄰
           for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
               if (dr === 0 && dc === 0) continue;
@@ -315,33 +315,36 @@
             if (flipped.length > 0) {
               priorityMoves.push(move);
             } else {
-              nonFlippingSpreadMoves.push(move);
+              nonFlippingMoves.push(move);
             }
           }
         }
       }
-      // 2. 檢查接觸步法（僅當未使用時）
-      if (!contactUsed) {
+      // 2. 檢查變異步法（僅當未使用時）
+      if (!mutationUsed) {
         for (let r = 0; r < boardSize; r++) {
           for (let c = 0; c < boardSize; c++) {
-            if (tempBoard[r][c] !== 'white') continue;
-            for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
+            if (tempBoard[r][c] !== 'red') continue; // 僅檢查普通紅棋
+            let flipped = [];
+            // 檢查四格相鄰的紅棋和白棋
+            [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
               const nr = r + dr, nc = c + dc;
-              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
-                priorityMoves.push({ r, c, flipped: [[r, c]], type: 'contact' });
-                break;
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && (tempBoard[nr][nc] === 'red' || tempBoard[nr][nc] === 'white')) {
+                flipped.push([nr, nc]);
               }
-            }
+            });
+            // 所有普通紅棋都可變異，即使無翻轉
+            priorityMoves.push({ r, c, flipped, type: 'mutation' });
           }
         }
       }
-      // 返回優先級高的步法（可感染的擴散或接觸），若無則返回無感染效果的擴散
-      return priorityMoves.length > 0 ? priorityMoves : nonFlippingSpreadMoves;
+      // 返回優先級高的步法（可感染白棋的擴散或任何變異），若無則返回無感染效果的擴散或變異
+      return priorityMoves.length > 0 ? priorityMoves : nonFlippingMoves;
     }
 
     function getValidWhiteMoves(tempBoard = board) {
       const moves = [];
-      // 1. 檢查救治步法（黑白棋規則，重症紅棋阻斷）
+      // 1. 檢查救治步法（黑白棋規則，變異紅棋阻斷）
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) {
           if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
@@ -382,10 +385,11 @@
     }
 
     function makeMove(r, c, flipped, player, moveType) {
-      if (moveType === 'contact') {
-        // 接觸：翻轉白棋為重症紅棋並標記已使用
+      if (moveType === 'mutation') {
+        // 變異：將選中紅棋及其四格內紅白棋變為變異紅棋
         board[r][c] = 'special_red';
-        contactUsed = true;
+        flipped.forEach(([fr, fc]) => board[fr][fc] = 'special_red');
+        mutationUsed = true;
       } else {
         // 擴散、救治或支援：落子並翻轉
         board[r][c] = player;
@@ -403,24 +407,27 @@
     function evaluateMove(move, player) {
       let score = 0;
       // 1. 翻轉得分
-      score += move.flipped.length * 2 + (move.type === 'contact' ? 3 : 1); // 接觸+3（因強大效果），其他+1
-      // 2. 位置權重（僅擴散或白方步法）
-      if (move.type !== 'contact') {
+      score += move.flipped.length * 2; // 每翻轉一顆紅白棋 +2
+      if (move.type === 'mutation') {
+        score += 3; // 變異額外加分（因生成變異紅棋）
+        // 穩定性：變異紅棋靠近黑格加分
+        let stability = 0;
+        [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
+          const nr = move.r + dr, nc = move.c + dc;
+          if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && isBlackCell(nr, nc)) {
+            stability += 2;
+          }
+        });
+        score += stability;
+      } else {
+        // 位置權重（僅擴散或白方步法）
         score += positionWeights[move.r][move.c];
       }
-      // 3. 穩定性（靠近黑格）
-      let stability = 0;
-      [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
-        const nr = move.r + dr, nc = move.c + dc;
-        if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && isBlackCell(nr, nc)) {
-          stability += 2;
-        }
-      });
-      score += stability;
-      // 4. 未來可走性
+      // 2. 未來可走性
       const tempBoard = board.map(row => row.slice());
-      if (move.type === 'contact') {
+      if (move.type === 'mutation') {
         tempBoard[move.r][move.c] = 'special_red';
+        move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = 'special_red');
       } else {
         tempBoard[move.r][move.c] = player;
         move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
