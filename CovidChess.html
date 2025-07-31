@@ -152,21 +152,18 @@
   <div id="overlay"></div>
   <div id="rules-panel">
     <h2>新冠肺炎棋規則</h2>
-    <p><strong>1. 遊戲流程</strong></p>
-    <p>紅方（病毒）先行，白方（醫護）後手，輪流行動至盤面填滿。若一方無可行動點，則由另一方繼續下棋，直到盤面填滿或雙方均無可行動點。</p>
-    <p><strong>2. 紅方（病毒）步法</strong></p>
-    <p>- <strong>擴散</strong>：落子於現有紅棋或變異紅棋周圍八格的空白處，落子後觸發「感染」，將相鄰四格（上下左右）的白棋翻為普通紅棋。<br>
-       - <strong>變異</strong>：選擇一顆現有紅棋，將其變為變異紅棋（顯示為深紅色棋子並加粗黑圈），同時將相鄰四格（上下左右）的紅棋和白棋變為變異紅棋，每局僅可使用一次。變異紅棋不可被白方翻轉，且阻斷白方救治連線。<br>
-       - 紅方必須優先選擇可感染白棋的擴散或變異步法（若未使用，優先級相同）；若兩者均無，則可選擇無感染效果的擴散或變異。</p>
-    <p><strong>3. 白方（醫護）步法</strong></p>
-    <p>- <strong>救治</strong>：依黑白棋規則落子，翻轉夾住的普通紅棋為白棋（沿八個方向，變異紅棋阻斷連線且不可翻轉）。<br>
-       - <strong>支援</strong>：落子於現有白棋相鄰四格（上下左右）的空白處，無翻轉效果。</p>
-    <p><strong>4. 棋盤設定</strong></p>
-    <p>棋盤為7x7格，包含13個黑格（不可落子）：正中央1格、四角各3格（邊角及相鄰2格）。<br>
-       初始棋子：紅棋在(3,3)和(5,5)，白棋在(3,5)和(5,3)。</p>
-    <p><strong>5. 遊戲結束與計分</strong></p>
-    <p>- 遊戲於盤面填滿或雙方均無可行動點時結束。<br>
-       - 每顆棋（含變異紅棋）計1分，總得分高者勝，相同則平局。</p>
+    <p><strong>遊戲流程</strong></p>
+    <p>紅方（病毒）先手，白方（醫護）後手，輪流落子至棋盤填滿或雙方無可走步。若一方無可走步，另一方繼續，直到遊戲結束。</p>
+    <p><strong>紅方（病毒）步法</strong></p>
+    <p>- <strong>擴散</strong>：落子於紅棋旁（八格相鄰）的空白格，感染上下左右的白棋為紅棋。<br>
+       - <strong>飛沫</strong>：選擇一顆紅棋，跳兩格（直、橫、斜八方向）到空白格，至少感染一顆上下左右的白棋為紅棋。<br>
+       - 紅方優先選擇可感染白棋的擴散或飛沫，無則選無感染的擴散或飛沫。</p>
+    <p><strong>白方（醫護）步法</strong></p>
+    <p>- <strong>救治</strong>：按黑白棋規則落子，翻轉夾住的紅棋為白棋（沿八方向）。<br>
+       - <strong>支援</strong>：落子於白棋旁（上下左右）的空白格，無翻轉效果。</p>
+    <p><strong>棋盤與計分</strong></p>
+    <p>7x7棋盤，13個黑格（正中央、四角各3格）不可落子。初始：紅棋(3-3, 5-5)，白棋(3-5, 5-3)。<br>
+       遊戲結束時，每顆棋計1分，得分高者勝，平分為平局。</p>
     <p>2020 by FallCloud</p>
     <button onclick="hideRules()">關閉</button>
   </div>
@@ -186,96 +183,130 @@
     let gameOver = false;
     let gameMode = null; // 'red' (玩家紅方), 'white' (玩家白方), 'two-player' (雙人)
     let aiPlayer = null; // 'red' 或 'white' 或 null
-    let mutationUsed = false; // 追蹤變異步法是否已使用
+    let selectedRedPiece = null; // 追蹤選中的紅棋（飛沫步法）
+    let randomWeights = {}; // AI 隨機權重
 
     // 黑格位置：正中央 (3,3)，四角各3格
     const blackCells = [
-      [0,0], [0,1], [1,0], // 左上
-      [0,5], [0,6], [1,6], // 右上
-      [5,0], [6,0], [6,1], // 左下
-      [5,6], [6,5], [6,6], // 右下
-      [3,3] // 中央
+      [0,0], [0,1], [0,5], [0,6],
+      [1,0], [1,6],
+      [5,0], [5,6], [6,0], [6,1], [6,5], [6,6],
+      [3,3]
     ];
 
-    // 位置權重：中心格子分數高，邊緣低
+    // 穩定格：不可翻轉的格子
+    const stableCells = [
+      [1,1], [1,2], [2,1], // 左上
+      [1,4], [1,5], [2,5], // 右上
+      [5,1], [5,2], [6,1], // 左下
+      [5,4], [5,5], [6,5]  // 右下
+    ];
+
+    // 位置權重：穩定格與中央格高分
     const positionWeights = [
-      [1, 1, 2, 2, 2, 1, 1],
-      [1, 3, 3, 3, 3, 3, 1],
-      [2, 3, 4, 4, 4, 3, 2],
-      [2, 3, 4, 0, 4, 3, 2], // 中央(3,3)為黑格，權重為0
-      [2, 3, 4, 4, 4, 3, 2],
-      [1, 3, 3, 3, 3, 3, 1],
-      [1, 1, 2, 2, 2, 1, 1]
+      [0, 0, 2, 2, 2, 0, 0],
+      [0, 4, 4, 3, 4, 4, 0],
+      [2, 4, 4, 4, 4, 4, 2],
+      [2, 3, 4, 0, 4, 3, 2],
+      [2, 4, 4, 4, 4, 4, 2],
+      [0, 4, 4, 3, 4, 4, 0],
+      [0, 0, 2, 2, 2, 0, 0]
     ];
 
     function initBoard() {
-      board = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
-      blackCells.forEach(([r, c]) => board[r][c] = 'black');
-      board[2][2] = 'red';   // 3-3
-      board[4][4] = 'red';   // 5-5
-      board[2][4] = 'white'; // 3-5
-      board[4][2] = 'white'; // 5-3
-      mutationUsed = false; // 重置變異步法使用狀態
+      try {
+        board = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+        blackCells.forEach(([r, c]) => board[r][c] = 'black');
+        board[2][2] = 'red';   // 3-3
+        board[4][4] = 'red';   // 5-5
+        board[2][4] = 'white'; // 3-5
+        board[4][2] = 'white'; // 5-3
+        selectedRedPiece = null;
+        randomWeights = {
+          flip: 3 * (0.9 + Math.random() * 0.2),
+          stability: 1 * (0.9 + Math.random() * 0.2),
+          future: 0.5 * (0.9 + Math.random() * 0.2),
+          opponent: 0.75 * (0.9 + Math.random() * 0.2),
+          corner: 3 * (0.9 + Math.random() * 0.2)
+        };
+      } catch (e) {
+        console.error('initBoard error:', e);
+      }
     }
 
     function drawBoard() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // 僅在遊戲未結束且為玩家回合時顯示可走步
-      if (!gameOver && gameMode && (currentPlayer !== aiPlayer || gameMode === 'two-player')) {
-        const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
-        const moveMap = new Map();
-        validMoves.forEach(move => {
-          const key = `${move.r},${move.c}`;
-          if (currentPlayer === 'white' && moveMap.has(key) && move.flipped.length > 0) {
-            moveMap.set(key, 'rgba(0, 0, 255, 0.3)'); // 優先顯示救治（藍色）
-          } else if (!moveMap.has(key)) {
-            const color = currentPlayer === 'red' ?
-                          (move.type === 'spread' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(128, 0, 128, 0.3)') : // 紅方：擴散紅色，變異紫色
-                          move.flipped.length > 0 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(0, 255, 0, 0.3)'; // 白方：救治藍色，支援綠色
-            moveMap.set(key, color);
+      try {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!gameOver && gameMode && (currentPlayer !== aiPlayer || gameMode === 'two-player')) {
+          const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+          const moveMap = new Map();
+          if (currentPlayer === 'red') {
+            if (selectedRedPiece) {
+              // 選中紅棋：僅顯示該紅棋及其飛沫目標格（黃色）
+              const moves = validMoves.filter(m => m.fromR === selectedRedPiece[0] && m.fromC === selectedRedPiece[1] && m.type === 'droplet');
+              moves.forEach(move => {
+                moveMap.set(`${move.r},${move.c}`, 'rgba(255, 255, 0, 0.3)');
+              });
+              moveMap.set(`${selectedRedPiece[0]},${selectedRedPiece[1]}`, 'rgba(255, 255, 0, 0.3)');
+            } else {
+              // 一般狀態：顯示擴散格（紅色）和可飛沫紅棋（黃色）
+              const hasFlippingMoves = validMoves.some(m => m.flipped.length > 0);
+              const dropletPieces = new Set();
+              validMoves.forEach(move => {
+                if (move.type === 'droplet' && (!hasFlippingMoves || move.flipped.length > 0)) {
+                  dropletPieces.add(`${move.fromR},${move.fromC}`);
+                } else if (move.type === 'spread' && (!hasFlippingMoves || move.flipped.length > 0)) {
+                  moveMap.set(`${move.r},${move.c}`, 'rgba(255, 0, 0, 0.3)');
+                }
+              });
+              dropletPieces.forEach(piece => {
+                moveMap.set(piece, 'rgba(255, 255, 0, 0.3)');
+              });
+            }
+          } else {
+            // 白方：顯示救治（藍色）和支援（綠色）
+            validMoves.forEach(move => {
+              const key = `${move.r},${move.c}`;
+              const color = move.flipped.length > 0 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(0, 255, 0, 0.3)';
+              moveMap.set(key, color);
+            });
           }
-        });
-        moveMap.forEach((color, key) => {
-          const [r, c] = key.split(',').map(Number);
-          const x = c * cellSize;
-          const y = r * cellSize;
-          ctx.fillStyle = color;
-          ctx.fillRect(x, y, cellSize, cellSize);
-        });
-      }
-      // 繪製棋盤和棋子
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          const x = c * cellSize;
-          const y = r * cellSize;
-          ctx.strokeStyle = '#333';
-          ctx.strokeRect(x, y, cellSize, cellSize);
-          if (board[r][c] === 'black') {
-            ctx.fillStyle = '#333';
+          moveMap.forEach((color, key) => {
+            const [r, c] = key.split(',').map(Number);
+            const x = c * cellSize;
+            const y = r * cellSize;
+            ctx.fillStyle = color;
             ctx.fillRect(x, y, cellSize, cellSize);
-          } else if (board[r][c] === 'red') {
-            ctx.fillStyle = '#ff0000';
-            ctx.beginPath();
-            ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (board[r][c] === 'special_red') {
-            ctx.fillStyle = '#8B0000'; // 變異紅棋：深紅色
-            ctx.beginPath();
-            ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 3; // 加粗黑圈
-            ctx.stroke();
-            ctx.lineWidth = 1; // 重置線條寬度
-          } else if (board[r][c] === 'white') {
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#000';
-            ctx.stroke();
+          });
+        }
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            const x = c * cellSize;
+            const y = r * cellSize;
+            ctx.strokeStyle = '#333';
+            ctx.strokeRect(x, y, cellSize, cellSize);
+            if (board[r][c] === 'black') {
+              ctx.fillStyle = '#333';
+              ctx.fillRect(x, y, cellSize, cellSize);
+            } else if (board[r][c] === 'red') {
+              ctx.fillStyle = '#ff0000';
+              ctx.beginPath();
+              ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#000';
+              ctx.stroke();
+            } else if (board[r][c] === 'white') {
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#000';
+              ctx.stroke();
+            }
           }
         }
+      } catch (e) {
+        console.error('drawBoard error:', e);
       }
     }
 
@@ -283,134 +314,157 @@
       return blackCells.some(([br, bc]) => br === r && bc === c);
     }
 
+    function isCorner(r, c) {
+      return stableCells.some(([sr, sc]) => sr === r && sc === c);
+    }
+
     function getValidRedMoves(tempBoard = board) {
-      const priorityMoves = []; // 可感染白棋的擴散或變異步法
-      const nonFlippingMoves = []; // 無感染效果的擴散或變異步法
-      // 1. 檢查擴散步法
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
-          let flipped = [];
-          let adjacentRed = false;
-          // 檢查是否與紅棋或變異紅棋八格相鄰
-          for (let dr = -1; dr <= 1; dr++) {
-            for (let dc = -1; dc <= 1; dc++) {
-              if (dr === 0 && dc === 0) continue;
+      try {
+        const priorityMoves = [];
+        const nonFlippingMoves = [];
+        // 擴散步法
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
+            let flipped = [];
+            let adjacentRed = false;
+            for (let dr = -1; dr <= 1; dr++) {
+              for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
+                  adjacentRed = true;
+                  [[0,1], [0,-1], [1,0], [-1,0]].forEach(([ddr, ddc]) => {
+                    const nnr = r + ddr, nnc = c + ddc;
+                    if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && tempBoard[nnr][nnc] === 'white') {
+                      flipped.push([nnr, nnc]);
+                    }
+                  });
+                  break;
+                }
+              }
+            }
+            if (adjacentRed) {
+              const move = { r, c, flipped, type: 'spread', fromR: null, fromC: null };
+              if (flipped.length > 0) {
+                priorityMoves.push(move);
+              } else {
+                nonFlippingMoves.push(move);
+              }
+            }
+          }
+        }
+        // 飛沫步法
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== 'red') continue;
+            const directions = [
+              [-2,0], [2,0], [0,-2], [0,2], // 直、橫
+              [-2,-2], [-2,2], [2,-2], [2,2] // 斜向
+            ];
+            for (let [dr, dc] of directions) {
               const nr = r + dr, nc = c + dc;
-              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && (tempBoard[nr][nc] === 'red' || tempBoard[nr][nc] === 'special_red')) {
-                adjacentRed = true;
-                // 檢查感染效果（相鄰四格白棋）
+              // 檢查目標格：界內、非黑格、空格
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize &&
+                  !isBlackCell(nr, nc) && tempBoard[nr][nc] === null) {
+                let flipped = [];
+                // 檢查上下左右感染
                 [[0,1], [0,-1], [1,0], [-1,0]].forEach(([ddr, ddc]) => {
-                  const nnr = r + ddr, nnc = c + ddc;
+                  const nnr = nr + ddr, nnc = nc + ddc;
                   if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && tempBoard[nnr][nnc] === 'white') {
                     flipped.push([nnr, nnc]);
                   }
                 });
+                const move = { r: nr, c: nc, flipped, type: 'droplet', fromR: r, fromC: c };
+                if (flipped.length > 0) {
+                  priorityMoves.push(move);
+                } else {
+                  nonFlippingMoves.push(move);
+                }
+              }
+            }
+          }
+        }
+        return priorityMoves.length > 0 ? priorityMoves : nonFlippingMoves;
+      } catch (e) {
+        console.error('getValidRedMoves error:', e);
+        return [];
+      }
+    }
+
+    function getValidWhiteMoves(tempBoard = board) {
+      try {
+        const moves = [];
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
+            let flipped = [];
+            [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]].forEach(([dr, dc]) => {
+              let nr = r + dr, nc = c + dc;
+              let line = [];
+              while (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
+                line.push([nr, nc]);
+                nr += dr;
+                nc += dc;
+              }
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white' && line.length > 0) {
+                flipped.push(...line);
+              }
+            });
+            if (flipped.length > 0) {
+              moves.push({ r, c, flipped, type: 'cure' });
+            }
+          }
+        }
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
+            for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
+              const nr = r + dr, nc = c + dc;
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white') {
+                if (!moves.some(m => m.r === r && m.c === c)) {
+                  moves.push({ r, c, flipped: [], type: 'support' });
+                }
                 break;
               }
             }
           }
-          if (adjacentRed) {
-            const move = { r, c, flipped, type: 'spread' };
-            if (flipped.length > 0) {
-              priorityMoves.push(move);
-            } else {
-              nonFlippingMoves.push(move);
-            }
-          }
         }
+        return moves;
+      } catch (e) {
+        console.error('getValidWhiteMoves error:', e);
+        return [];
       }
-      // 2. 檢查變異步法（僅當未使用時）
-      if (!mutationUsed) {
-        for (let r = 0; r < boardSize; r++) {
-          for (let c = 0; c < boardSize; c++) {
-            if (tempBoard[r][c] !== 'red') continue; // 僅檢查普通紅棋
-            let flipped = [];
-            // 檢查四格相鄰的紅棋和白棋
-            [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
-              const nr = r + dr, nc = c + dc;
-              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && (tempBoard[nr][nc] === 'red' || tempBoard[nr][nc] === 'white')) {
-                flipped.push([nr, nc]);
-              }
-            });
-            // 所有普通紅棋都可變異，即使無翻轉
-            priorityMoves.push({ r, c, flipped, type: 'mutation' });
-          }
-        }
-      }
-      // 返回優先級高的步法（可感染白棋的擴散或任何變異），若無則返回無感染效果的擴散或變異
-      return priorityMoves.length > 0 ? priorityMoves : nonFlippingMoves;
     }
 
-    function getValidWhiteMoves(tempBoard = board) {
-      const moves = [];
-      // 1. 檢查救治步法（黑白棋規則，變異紅棋阻斷）
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
-          let flipped = [];
-          [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]].forEach(([dr, dc]) => {
-            let nr = r + dr, nc = c + dc;
-            let line = [];
-            while (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
-              line.push([nr, nc]);
-              nr += dr;
-              nc += dc;
-            }
-            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white' && line.length > 0) {
-              flipped.push(...line);
-            }
-          });
-          if (flipped.length > 0) {
-            moves.push({ r, c, flipped, type: 'cure' });
-          }
+    function makeMove(r, c, flipped, player, moveType, fromR, fromC) {
+      try {
+        if (moveType === 'droplet') {
+          board[fromR][fromC] = null;
+          board[r][c] = 'red';
+          flipped.forEach(([fr, fc]) => board[fr][fc] = 'red');
+        } else {
+          board[r][c] = player;
+          flipped.forEach(([fr, fc]) => board[fr][fc] = player);
         }
-      }
-      // 2. 檢查支援步法（白棋相鄰四格）
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
-          for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
-            const nr = r + dr, nc = c + dc;
-            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white') {
-              if (!moves.some(m => m.r === r && m.c === c)) {
-                moves.push({ r, c, flipped: [], type: 'support' });
-              }
-              break;
-            }
-          }
+        selectedRedPiece = null;
+        currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
+        updateStatus();
+        drawBoard();
+        checkGameOver();
+        if (!gameOver && gameMode !== 'two-player' && currentPlayer === aiPlayer) {
+          setTimeout(makeAIMove, 500);
         }
-      }
-      return moves;
-    }
-
-    function makeMove(r, c, flipped, player, moveType) {
-      if (moveType === 'mutation') {
-        // 變異：將選中紅棋及其四格內紅白棋變為變異紅棋
-        board[r][c] = 'special_red';
-        flipped.forEach(([fr, fc]) => board[fr][fc] = 'special_red');
-        mutationUsed = true;
-      } else {
-        // 擴散、救治或支援：落子並翻轉
-        board[r][c] = player;
-        flipped.forEach(([fr, fc]) => board[fr][fc] = player);
-      }
-      currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
-      updateStatus();
-      drawBoard();
-      checkGameOver();
-      if (!gameOver && gameMode !== 'two-player' && currentPlayer === aiPlayer) {
-        setTimeout(makeAIMove, 500);
+      } catch (e) {
+        console.error('makeMove error:', e);
       }
     }
 
     function evaluateMove(move, player) {
-      let score = 0;
-      // 1. 翻轉得分
-      score += move.flipped.length * 2; // 每翻轉一顆紅白棋 +2
-      if (move.type === 'mutation') {
-        score += 3; // 變異額外加分（因生成變異紅棋）
-        // 穩定性：變異紅棋靠近黑格加分
+      try {
+        let score = 0;
+        score += move.flipped.length * randomWeights.flip;
+        score += positionWeights[move.r][move.c] * randomWeights.stability;
         let stability = 0;
         [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
           const nr = move.r + dr, nc = move.c + dc;
@@ -418,153 +472,243 @@
             stability += 2;
           }
         });
-        score += stability;
-      } else {
-        // 位置權重（僅擴散或白方步法）
-        score += positionWeights[move.r][move.c];
+        score += stability * randomWeights.stability;
+        if (isCorner(move.r, move.c)) {
+          score += randomWeights.corner;
+        }
+        if (player === 'red') {
+          const tempBoard = board.map(row => row.slice());
+          if (move.type === 'droplet') {
+            tempBoard[move.fromR][move.fromC] = null;
+            tempBoard[move.r][move.c] = 'red';
+            move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = 'red');
+          } else {
+            tempBoard[move.r][move.c] = 'red';
+            move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = 'red');
+          }
+          let emptyNeighbors = 0;
+          [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
+            const nr = move.r + dr, nc = move.c + dc;
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === null && !isBlackCell(nr, nc)) {
+              emptyNeighbors++;
+            }
+          });
+          score += Math.min(emptyNeighbors * randomWeights.future, 2);
+        }
+        const tempBoard = board.map(row => row.slice());
+        if (move.type === 'droplet') {
+          tempBoard[move.fromR][move.fromC] = null;
+          tempBoard[move.r][move.c] = player;
+          move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
+        } else {
+          tempBoard[move.r][move.c] = player;
+          move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
+        }
+        const opponent = player === 'red' ? 'white' : 'red';
+        const opponentMoves = opponent === 'red' ? getValidRedMoves(tempBoard) : getValidWhiteMoves(tempBoard);
+        score -= opponentMoves.length * randomWeights.opponent;
+        return score;
+      } catch (e) {
+        console.error('evaluateMove error:', e);
+        return 0;
       }
-      // 2. 未來可走性
-      const tempBoard = board.map(row => row.slice());
-      if (move.type === 'mutation') {
-        tempBoard[move.r][move.c] = 'special_red';
-        move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = 'special_red');
-      } else {
-        tempBoard[move.r][move.c] = player;
-        move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
-      }
-      const opponent = player === 'red' ? 'white' : 'red';
-      const opponentMoves = opponent === 'red' ? getValidRedMoves(tempBoard) : getValidWhiteMoves(tempBoard);
-      score -= opponentMoves.length * 0.5;
-      return score;
     }
 
     function makeAIMove() {
-      if (gameOver) return;
-      const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
-      if (validMoves.length === 0) {
-        currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
-        updateStatus();
-        checkGameOver();
-        return;
-      }
-      let bestMove = validMoves[0];
-      let bestScore = evaluateMove(bestMove, currentPlayer);
-      for (let i = 1; i < validMoves.length; i++) {
-        const score = evaluateMove(validMoves[i], currentPlayer);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = validMoves[i];
+      try {
+        if (gameOver) return;
+        const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+        if (validMoves.length === 0) {
+          currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
+          updateStatus();
+          checkGameOver();
+          return;
         }
+        const scoredMoves = validMoves.map(move => ({
+          move,
+          score: evaluateMove(move, currentPlayer)
+        }));
+        const maxScore = Math.max(...scoredMoves.map(sm => sm.score));
+        const bestMoves = scoredMoves.filter(sm => sm.score >= maxScore - 1);
+        const selectedMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+        makeMove(selectedMove.r, selectedMove.c, selectedMove.flipped, currentPlayer, selectedMove.type, selectedMove.fromR, selectedMove.fromC);
+      } catch (e) {
+        console.error('makeAIMove error:', e);
       }
-      makeMove(bestMove.r, bestMove.c, bestMove.flipped, currentPlayer, bestMove.type);
     }
 
     function updateStatus() {
-      if (gameOver) return;
-      const redMoves = getValidRedMoves();
-      const whiteMoves = getValidWhiteMoves();
-      if (currentPlayer === 'red' && redMoves.length === 0) {
-        if (whiteMoves.length > 0) {
-          currentPlayer = 'white';
-          statusDiv.textContent = '紅方無可行動點，白方繼續';
+      try {
+        if (gameOver) return;
+        const redMoves = getValidRedMoves();
+        const whiteMoves = getValidWhiteMoves();
+        if (currentPlayer === 'red' && redMoves.length === 0) {
+          if (whiteMoves.length > 0) {
+            currentPlayer = 'white';
+            statusDiv.textContent = '紅方無可行動點，白方繼續';
+          } else {
+            gameOver = true;
+            checkGameOver();
+          }
+        } else if (currentPlayer === 'white' && whiteMoves.length === 0) {
+          if (redMoves.length > 0) {
+            currentPlayer = 'red';
+            statusDiv.textContent = '白方無可行動點，紅方繼續';
+          } else {
+            gameOver = true;
+            checkGameOver();
+          }
         } else {
-          gameOver = true;
-          checkGameOver();
+          statusDiv.textContent = currentPlayer === 'red' ? '紅方（病毒）回合' : '白方（醫護）回合';
         }
-      } else if (currentPlayer === 'white' && whiteMoves.length === 0) {
-        if (redMoves.length > 0) {
-          currentPlayer = 'red';
-          statusDiv.textContent = '白方無可行動點，紅方繼續';
-        } else {
-          gameOver = true;
-          checkGameOver();
-        }
-      } else {
-        statusDiv.textContent = currentPlayer === 'red' ? '紅方（病毒）回合' : '白方（醫護）回合';
+        updateScore();
+      } catch (e) {
+        console.error('updateStatus error:', e);
       }
-      updateScore();
     }
 
     function updateScore() {
-      let redScore = 0, whiteScore = 0;
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          if (board[r][c] === 'red' || board[r][c] === 'special_red') redScore++;
-          else if (board[r][c] === 'white') whiteScore++;
+      try {
+        let redScore = 0, whiteScore = 0;
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (board[r][c] === 'red') redScore++;
+            else if (board[r][c] === 'white') whiteScore++;
+          }
         }
+        scoreDiv.textContent = `紅方: ${redScore} | 白方: ${whiteScore}`;
+      } catch (e) {
+        console.error('updateScore error:', e);
       }
-      scoreDiv.textContent = `紅方: ${redScore} | 白方: ${whiteScore}`;
     }
 
     function checkGameOver() {
-      if (!gameOver) return;
-      let redScore = 0, whiteScore = 0;
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          if (board[r][c] === 'red' || board[r][c] === 'special_red') redScore++;
-          else if (board[r][c] === 'white') whiteScore++;
+      try {
+        if (!gameOver) return;
+        let redScore = 0, whiteScore = 0;
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (board[r][c] === 'red') redScore++;
+            else if (board[r][c] === 'white') whiteScore++;
+          }
         }
+        let result = redScore > whiteScore ? '紅方（病毒）獲勝！' : redScore < whiteScore ? '白方（醫護）獲勝！' : '平局！';
+        statusDiv.textContent = `遊戲結束！${result}`;
+        scoreDiv.textContent = `最終得分 - 紅方: ${redScore} | 白方: ${whiteScore}`;
+      } catch (e) {
+        console.error('checkGameOver error:', e);
       }
-      let result = redScore > whiteScore ? '紅方（病毒）獲勝！' : redScore < whiteScore ? '白方（醫護）獲勝！' : '平局！';
-      statusDiv.textContent = `遊戲結束！${result}`;
-      scoreDiv.textContent = `最終得分 - 紅方: ${redScore} | 白方: ${whiteScore}`;
     }
 
     function showRules() {
-      rulesPanel.style.display = 'block';
-      overlay.style.display = 'block';
+      try {
+        rulesPanel.style.display = 'block';
+        overlay.style.display = 'block';
+      } catch (e) {
+        console.error('showRules error:', e);
+      }
     }
 
     function hideRules() {
-      rulesPanel.style.display = 'none';
-      overlay.style.display = 'none';
+      try {
+        rulesPanel.style.display = 'none';
+        overlay.style.display = 'none';
+      } catch (e) {
+        console.error('hideRules error:', e);
+      }
     }
 
     function startGame(mode) {
-      gameMode = mode;
-      aiPlayer = mode === 'red' ? 'white' : mode === 'white' ? 'red' : null;
-      modeSelection.style.display = 'none';
-      gameControls.style.display = 'flex';
-      initGame();
-      if (gameMode === 'white' && currentPlayer === 'red') {
-        setTimeout(makeAIMove, 500);
+      try {
+        gameMode = mode;
+        aiPlayer = mode === 'red' ? 'white' : mode === 'white' ? 'red' : null;
+        modeSelection.style.display = 'none';
+        gameControls.style.display = 'flex';
+        initGame();
+        if (gameMode === 'white' && currentPlayer === 'red') {
+          setTimeout(makeAIMove, 500);
+        }
+      } catch (e) {
+        console.error('startGame error:', e);
+        statusDiv.textContent = '遊戲初始化失敗，請重新載入頁面';
       }
     }
 
     function resetToModeSelection() {
-      gameMode = null;
-      aiPlayer = null;
-      gameOver = false;
-      modeSelection.style.display = 'flex';
-      gameControls.style.display = 'none';
-      statusDiv.textContent = '請選擇遊戲模式';
-      initBoard();
-      updateScore();
-      drawBoard();
+      try {
+        gameMode = null;
+        aiPlayer = null;
+        gameOver = false;
+        selectedRedPiece = null;
+        modeSelection.style.display = 'flex';
+        gameControls.style.display = 'none';
+        statusDiv.textContent = '請選擇遊戲模式';
+        initBoard();
+        updateScore();
+        drawBoard();
+      } catch (e) {
+        console.error('resetToModeSelection error:', e);
+      }
     }
 
     function initGame() {
-      initBoard();
-      currentPlayer = 'red';
-      gameOver = false;
-      updateStatus();
-      drawBoard();
+      try {
+        initBoard();
+        currentPlayer = 'red';
+        gameOver = false;
+        updateStatus();
+        drawBoard();
+      } catch (e) {
+        console.error('initGame error:', e);
+      }
     }
 
     canvas.addEventListener('click', (e) => {
-      if (gameOver || gameMode === null || (currentPlayer === aiPlayer && gameMode !== 'two-player')) return;
-      const rect = canvas.getBoundingClientRect();
-      const r = Math.floor((e.clientY - rect.top) / cellSize);
-      const c = Math.floor((e.clientX - rect.left) / cellSize);
-      if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) return;
-      const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
-      const move = validMoves.find(m => m.r === r && m.c === c);
-      if (move) {
-        makeMove(r, c, move.flipped, currentPlayer, move.type);
+      try {
+        if (gameOver || gameMode === null || (currentPlayer === aiPlayer && gameMode !== 'two-player')) return;
+        const rect = canvas.getBoundingClientRect();
+        const r = Math.floor((e.clientY - rect.top) / cellSize);
+        const c = Math.floor((e.clientX - rect.left) / cellSize);
+        if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) return;
+        if (currentPlayer === 'red') {
+          const validMoves = getValidRedMoves();
+          if (selectedRedPiece) {
+            const move = validMoves.find(m => m.r === r && m.c === c && m.fromR === selectedRedPiece[0] && m.fromC === selectedRedPiece[1] && m.type === 'droplet');
+            if (move) {
+              makeMove(r, c, move.flipped, currentPlayer, move.type, move.fromR, move.fromC);
+            } else {
+              selectedRedPiece = null;
+              drawBoard();
+            }
+          } else {
+            if (board[r][c] === 'red' && validMoves.some(m => m.fromR === r && m.fromC === c && m.type === 'droplet')) {
+              selectedRedPiece = [r, c];
+              drawBoard();
+            } else {
+              const move = validMoves.find(m => m.r === r && m.c === c && m.type === 'spread');
+              if (move) {
+                makeMove(r, c, move.flipped, currentPlayer, move.type, null, null);
+              }
+            }
+          }
+        } else {
+          const validMoves = getValidWhiteMoves();
+          const move = validMoves.find(m => m.r === r && m.c === c);
+          if (move) {
+            makeMove(r, c, move.flipped, currentPlayer, move.type, null, null);
+          }
+        }
+      } catch (e) {
+        console.error('canvas click error:', e);
       }
     });
 
-    initGame();
+    try {
+      initGame();
+    } catch (e) {
+      console.error('Initial game setup error:', e);
+      statusDiv.textContent = '遊戲載入失敗，請重新載入頁面';
+    }
   </script>
 </body>
 </html>
