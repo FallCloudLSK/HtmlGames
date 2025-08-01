@@ -1,0 +1,607 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>晴雨棋</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        canvas {
+            border: 2px solid black;
+        }
+        #controls, #roleSelection {
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #status {
+            margin: 10px 0;
+            font-size: 18px;
+            display: none;
+        }
+        #rules {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 2px solid black;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        #rules h2 {
+            margin-top: 0;
+        }
+        #closeRulesBtn {
+            display: block;
+            margin: 10px auto;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>晴雨棋</h1>
+    <canvas id="board" width="480" height="400"></canvas>
+    <div id="roleSelection">
+        <p>請做出您的選擇：</p>
+        <button id="chooseSunny">選擇晴方</button>
+        <button id="chooseRainy">選擇雨方</button>
+    </div>
+    <div id="controls" style="display: none;">
+        <button id="rulesBtn">規則說明</button>
+        <button id="restartBtn">重新開始</button>
+    </div>
+    <div id="status"></div>
+    <div id="footer">2025 by FallCloud</div>
+    <div id="rules">
+        <h2>晴雨棋規則</h2>
+        <p>1. 棋盤為 10x10，分為晴方和雨方，領地多者為勝。晴方領地為黃色，雨方領地為藍色，另於對局開始時隨機生成5顆雷心棋（⚡️）。</p>
+        <p>2. 晴方先手，輪流落子。晴方落子於任意空地，該格及上下左右最多延伸 2 格（至非空地止）之空地變為晴方領地。</p>
+        <p>雨方落子於任意空地，該格及上下左右 1 格（含晴方領地，但不含晴心棋、雷心棋）變為雨方領地。</p>
+        <p>3. 雷心棋若上下或左右被晴方或雨方領地包圍，變為該方領地。已佔領的雷心棋若被另一方再次包圍，會翻轉為對方領地。</p>
+        <p>4. 雙方各落10子後對局結束，領地數量多者獲勝。</p>
+        <button id="closeRulesBtn">關閉</button>
+        <div style="text-align: center; margin-top: 20px;">2025 by FallCloud</div>
+    </div>
+    <script>
+        const canvas = document.getElementById('board');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        const rulesBtn = document.getElementById('rulesBtn');
+        const closeRulesBtn = document.getElementById('closeRulesBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const chooseSunnyBtn = document.getElementById('chooseSunny');
+        const chooseRainyBtn = document.getElementById('chooseRainy');
+        const roleSelection = document.getElementById('roleSelection');
+        const controls = document.getElementById('controls');
+        const rulesDiv = document.getElementById('rules');
+        const GRID_SIZE = 10;
+        const CELL_SIZE = 40;
+        const COLORS = {
+            empty: '#FFFFFF',
+            obstacle: '#FFFFFF',
+            sunnyTerritory: '#FFD700',
+            rainyTerritory: '#4682B4',
+            sunnyObstacle: '#FFD700',
+            rainyObstacle: '#4682B4',
+            obstacleInner: '#E0FFFF'
+        };
+        let board = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill('empty'));
+        let currentPlayer, playerRole, aiRole, sunnyHearts = [], rainyHearts = [], sunnyMoves = 0, rainyMoves = 0;
+
+        function initGame() {
+            board = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill('empty'));
+            let obstacles = [];
+            while (obstacles.length < 5) {
+                let x = Math.floor(Math.random() * GRID_SIZE);
+                let y = Math.floor(Math.random() * GRID_SIZE);
+                if (board[y][x] === 'empty') {
+                    board[y][x] = 'obstacle';
+                    obstacles.push([x, y]);
+                }
+            }
+            currentPlayer = 'sunny';
+            sunnyHearts = [];
+            rainyHearts = [];
+            sunnyMoves = 0;
+            rainyMoves = 0;
+            rulesDiv.style.display = 'none';
+            roleSelection.style.display = 'none';
+            controls.style.display = 'block';
+            statusDiv.style.display = 'block';
+            drawBoard();
+            updateStatus();
+            if (currentPlayer === aiRole) {
+                setTimeout(aiMove, 500);
+            }
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    ctx.fillStyle = COLORS[board[y][x]] || COLORS.empty;
+                    ctx.fillRect(x * CELL_SIZE + 40, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    if (['obstacle', 'sunnyObstacle', 'rainyObstacle'].includes(board[y][x])) {
+                        ctx.fillStyle = COLORS.obstacleInner;
+                        ctx.beginPath();
+                        ctx.arc(x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#000000';
+                        ctx.font = '24px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('⚡️', x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2);
+                        ctx.strokeStyle = '#000000';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    if (sunnyHearts.includes([x, y].join(','))) {
+                        ctx.fillStyle = '#FFA500';
+                        ctx.beginPath();
+                        ctx.arc(x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000000';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    if (rainyHearts.includes([x, y].join(','))) {
+                        ctx.fillStyle = '#1E90FF';
+                        ctx.beginPath();
+                        ctx.moveTo(x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 4);
+                        ctx.quadraticCurveTo(x * CELL_SIZE + 40 + 3 * CELL_SIZE / 4, y * CELL_SIZE + 3 * CELL_SIZE / 4, x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + 3 * CELL_SIZE / 4);
+                        ctx.quadraticCurveTo(x * CELL_SIZE + 40 + CELL_SIZE / 4, y * CELL_SIZE + 3 * CELL_SIZE / 4, x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 4);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000000';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(x * CELL_SIZE + 40 + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    ctx.strokeStyle = '#000000';
+                    ctx.strokeRect(x * CELL_SIZE + 40, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+            for (let i = 0; i < 10 - sunnyMoves; i++) {
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.arc(20, i * CELL_SIZE + 20, CELL_SIZE / 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(20, i * CELL_SIZE + 20, CELL_SIZE / 3, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            for (let i = 0; i < 10 - rainyMoves; i++) {
+                ctx.fillStyle = '#1E90FF';
+                ctx.beginPath();
+                ctx.moveTo(460, i * CELL_SIZE + CELL_SIZE / 4);
+                ctx.quadraticCurveTo(460 + CELL_SIZE / 4, i * CELL_SIZE + 3 * CELL_SIZE / 4, 460, i * CELL_SIZE + 3 * CELL_SIZE / 4);
+                ctx.quadraticCurveTo(460 - CELL_SIZE / 4, i * CELL_SIZE + 3 * CELL_SIZE / 4, 460, i * CELL_SIZE + CELL_SIZE / 4);
+                ctx.fill();
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(460, i * CELL_SIZE + 20, CELL_SIZE / 3, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            if (playerRole) {
+                updateStatus();
+            }
+        }
+
+        function updateStatus() {
+            if (!playerRole || !board) {
+                statusDiv.textContent = '';
+                return;
+            }
+            let counts = countTerritory(board);
+            let result = '';
+            if (sunnyMoves + rainyMoves >= 20) {
+                let winner = counts.sunny > counts.rainy ? 'sunny' : counts.rainy > counts.sunny ? 'rainy' : 'draw';
+                let winnerText = winner === 'sunny' ? '晴方' : winner === 'rainy' ? '雨方' : '平局';
+                let playerWon = (winner === playerRole || winner === 'draw');
+                result = winner === 'draw' ? `對局結束！平局 (晴方領地: ${counts.sunny}, 雨方領地: ${counts.rainy})` :
+                    `對局結束！${playerWon ? '恭喜' : '可惜'}！${winnerText}戰勝了${winner === 'sunny' ? '雨方' : '晴方'}！(晴方領地: ${counts.sunny}, 雨方領地: ${counts.rainy})`;
+            } else {
+                result = `${currentPlayer === 'sunny' ? '晴方' : '雨方'} 回合 (晴方領地: ${counts.sunny}, 雨方領地: ${counts.rainy})`;
+            }
+            statusDiv.textContent = result;
+        }
+
+        function updateSunnyTerritory(x, y, tempBoard, tempSunnyHearts, tempSunnyMoves) {
+            tempBoard[y][x] = 'sunnyTerritory';
+            tempSunnyHearts.push([x, y].join(','));
+            tempSunnyMoves.value++;
+            const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+            for (let [dx, dy] of directions) {
+                for (let i = 1; i <= 2; i++) {
+                    let nx = x + i * dx, ny = y + i * dy;
+                    if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE || tempBoard[ny][nx] !== 'empty') break;
+                    tempBoard[ny][nx] = 'sunnyTerritory';
+                }
+            }
+        }
+
+        function updateRainyTerritory(x, y, tempBoard, tempRainyHearts, tempSunnyHearts, tempRainyMoves) {
+            tempBoard[y][x] = 'rainyTerritory';
+            tempRainyHearts.push([x, y].join(','));
+            tempRainyMoves.value++;
+            const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+            for (let [dx, dy] of directions) {
+                let nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE &&
+                    !['obstacle', 'sunnyObstacle', 'rainyObstacle'].includes(tempBoard[ny][nx]) &&
+                    !tempSunnyHearts.includes([nx, ny].join(','))) {
+                    tempBoard[ny][nx] = 'rainyTerritory';
+                }
+            }
+        }
+
+        function checkObstacleCapture(tempBoard, tempSunnyHearts, tempRainyHearts) {
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (['obstacle', 'sunnyObstacle', 'rainyObstacle'].includes(tempBoard[y][x])) {
+                        if (y > 0 && y < GRID_SIZE - 1 && tempBoard[y-1][x] === 'sunnyTerritory' && tempBoard[y+1][x] === 'sunnyTerritory') {
+                            tempBoard[y][x] = 'sunnyObstacle';
+                        } else if (x > 0 && x < GRID_SIZE - 1 && tempBoard[y][x-1] === 'sunnyTerritory' && tempBoard[y][x+1] === 'sunnyTerritory') {
+                            tempBoard[y][x] = 'sunnyObstacle';
+                        } else if (y > 0 && y < GRID_SIZE - 1 && tempBoard[y-1][x] === 'rainyTerritory' && tempBoard[y+1][x] === 'rainyTerritory') {
+                            tempBoard[y][x] = 'rainyObstacle';
+                        } else if (x > 0 && x < GRID_SIZE - 1 && tempBoard[y][x-1] === 'rainyTerritory' && tempBoard[y][x+1] === 'rainyTerritory') {
+                            tempBoard[y][x] = 'rainyObstacle';
+                        }
+                    }
+                }
+            }
+        }
+
+        function isValidMove(x, y, tempBoard) {
+            return tempBoard && tempBoard[y] && tempBoard[y][x] === 'empty';
+        }
+
+        function countTerritory(tempBoard) {
+            if (!tempBoard || !tempBoard[0]) return { sunny: 0, rainy: 0 };
+            let sunnyCount = 0, rainyCount = 0;
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (['sunnyTerritory', 'sunnyObstacle'].includes(tempBoard[y][x])) sunnyCount++;
+                    if (['rainyTerritory', 'rainyObstacle'].includes(tempBoard[y][x])) rainyCount++;
+                }
+            }
+            return { sunny: sunnyCount, rainy: rainyCount };
+        }
+
+        function evaluateBoard(tempBoard, tempSunnyHearts, tempRainyHearts, player) {
+            if (!tempBoard || !tempBoard[0] || !tempSunnyHearts || !tempRainyHearts) {
+                console.log('Invalid board or hearts in evaluateBoard');
+                return 0;
+            }
+            let counts = countTerritory(tempBoard);
+            let score = player === 'sunny' ? counts.sunny - counts.rainy : counts.rainy - counts.sunny;
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if ((tempBoard[y][x] === player + 'Territory' || tempBoard[y][x] === player + 'Obstacle') &&
+                        Math.abs(x - 4.5) <= 1.5 && Math.abs(y - 4.5) <= 1.5) {
+                        score += 0.5;
+                    }
+                }
+            }
+            return score;
+        }
+
+        function minimax(tempBoard, tempSunnyHearts, tempRainyHearts, tempSunnyMoves, tempRainyMoves, depth, alpha, beta, maximizingPlayer, player) {
+            if (!tempBoard || !tempBoard[0] || !tempSunnyHearts || !tempRainyHearts) {
+                console.log('Invalid board or hearts in minimax');
+                return 0;
+            }
+            if (depth === 0 || tempSunnyMoves + tempRainyMoves >= 20) {
+                return evaluateBoard(tempBoard, tempSunnyHearts, tempRainyHearts, player);
+            }
+            let moves = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (isValidMove(x, y, tempBoard)) {
+                        moves.push({ x, y });
+                    }
+                }
+            }
+            if (!moves.length) {
+                return evaluateBoard(tempBoard, tempSunnyHearts, tempRainyHearts, player);
+            }
+            if (maximizingPlayer) {
+                let maxEval = -Infinity;
+                for (let { x, y } of moves) {
+                    let newBoard = tempBoard.map(row => row.slice());
+                    let newSunnyHearts = [...tempSunnyHearts];
+                    let newRainyHearts = [...tempRainyHearts];
+                    let newSunnyMoves = { value: tempSunnyMoves };
+                    let newRainyMoves = { value: tempRainyMoves };
+                    if (player === 'sunny') {
+                        updateSunnyTerritory(x, y, newBoard, newSunnyHearts, newSunnyMoves);
+                    } else {
+                        updateRainyTerritory(x, y, newBoard, newRainyHearts, newSunnyHearts, newRainyMoves);
+                    }
+                    checkObstacleCapture(newBoard, newSunnyHearts, newRainyHearts);
+                    let evalScore = minimax(newBoard, newSunnyHearts, newRainyHearts, newSunnyMoves.value, newRainyMoves.value, depth - 1, alpha, beta, false, player);
+                    maxEval = Math.max(maxEval, evalScore);
+                    alpha = Math.max(alpha, evalScore);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (let { x, y } of moves) {
+                    let newBoard = tempBoard.map(row => row.slice());
+                    let newSunnyHearts = [...tempSunnyHearts];
+                    let newRainyHearts = [...tempRainyHearts];
+                    let newSunnyMoves = { value: tempSunnyMoves };
+                    let newRainyMoves = { value: tempRainyMoves };
+                    if (player === 'sunny') {
+                        updateRainyTerritory(x, y, newBoard, newRainyHearts, newSunnyHearts, newRainyMoves);
+                    } else {
+                        updateSunnyTerritory(x, y, newBoard, newSunnyHearts, newSunnyMoves);
+                    }
+                    checkObstacleCapture(newBoard, newSunnyHearts, newRainyHearts);
+                    let evalScore = minimax(newBoard, newSunnyHearts, newRainyHearts, newSunnyMoves.value, newRainyMoves.value, depth - 1, alpha, beta, true, player);
+                    minEval = Math.min(minEval, evalScore);
+                    beta = Math.min(beta, evalScore);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
+        }
+
+        function evaluateMove(x, y, player) {
+            if (!isValidMove(x, y, board)) {
+                console.log(`Invalid move at (${x}, ${y}) for ${player}`);
+                return -Infinity;
+            }
+            let tempBoard = board.map(row => row.slice());
+            let tempSunnyHearts = [...sunnyHearts];
+            let tempRainyHearts = [...rainyHearts];
+            let tempSunnyMoves = sunnyMoves;
+            let tempRainyMoves = rainyMoves;
+            let immediateScore = 0;
+            if (player === 'sunny') {
+                updateSunnyTerritory(x, y, tempBoard, tempSunnyHearts, { value: tempSunnyMoves });
+                tempSunnyMoves = { value: tempSunnyMoves + 1 };
+                immediateScore = 1;
+                const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                for (let [dx, dy] of directions) {
+                    for (let i = 1; i <= 2; i++) {
+                        let nx = x + i * dx, ny = y + i * dy;
+                        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE || board[ny][nx] !== 'empty') break;
+                        if (tempBoard[ny][nx] === 'sunnyTerritory') immediateScore++;
+                    }
+                }
+            } else {
+                updateRainyTerritory(x, y, tempBoard, tempRainyHearts, tempSunnyHearts, { value: tempRainyMoves });
+                tempRainyMoves = { value: tempRainyMoves + 1 };
+                immediateScore = 1;
+                const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                for (let [dx, dy] of directions) {
+                    let nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE &&
+                        !['obstacle', 'sunnyObstacle', 'rainyObstacle'].includes(board[ny][nx]) &&
+                        !tempSunnyHearts.includes([nx, ny].join(','))) {
+                        immediateScore += board[ny][nx] === 'sunnyTerritory' ? 2 : 1;
+                    }
+                }
+            }
+            checkObstacleCapture(tempBoard, tempSunnyHearts, tempRainyHearts);
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (tempBoard[y][x] === player + 'Obstacle' && board[y][x] !== player + 'Obstacle') {
+                        immediateScore += 5;
+                    }
+                }
+            }
+            if (player === 'rainy') {
+                let blockScore = 0;
+                for (let ty = 0; ty < GRID_SIZE; ty++) {
+                    for (let tx = 0; tx < GRID_SIZE; tx++) {
+                        if (tempBoard[ty][tx] === 'empty') {
+                            let testBoard = tempBoard.map(row => row.slice());
+                            let testSunnyHearts = [...tempSunnyHearts];
+                            let testRainyHearts = [...tempRainyHearts];
+                            let testSunnyMoves = { value: tempSunnyMoves };
+                            updateSunnyTerritory(tx, ty, testBoard, testSunnyHearts, testSunnyMoves);
+                            checkObstacleCapture(testBoard, testSunnyHearts, testRainyHearts);
+                            for (let oy = 0; oy < GRID_SIZE; oy++) {
+                                for (let ox = 0; ox < GRID_SIZE; ox++) {
+                                    if (testBoard[oy][ox] === 'sunnyObstacle' && tempBoard[oy][ox] !== 'sunnyObstacle') {
+                                        blockScore += 10;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                immediateScore += blockScore;
+            }
+            let minimaxScore = minimax(tempBoard, tempSunnyHearts, tempRainyHearts, tempSunnyMoves.value, tempRainyMoves.value, 2, -Infinity, Infinity, player === 'sunny', player);
+            console.log(`Evaluated move (${x}, ${y}) for ${player}: immediateScore=${immediateScore}, minimaxScore=${minimaxScore}`);
+            return immediateScore + minimaxScore;
+        }
+
+        function attack(x, y) {
+            if (!isValidMove(x, y, board)) {
+                console.log(`Attack failed: Invalid move at (${x}, ${y})`);
+                return;
+            }
+            if (currentPlayer === 'sunny') {
+                updateSunnyTerritory(x, y, board, sunnyHearts, { value: sunnyMoves });
+                sunnyMoves++;
+            } else {
+                updateRainyTerritory(x, y, board, rainyHearts, sunnyHearts, { value: rainyMoves });
+                rainyMoves++;
+            }
+            checkObstacleCapture(board, sunnyHearts, rainyHearts);
+            if (sunnyMoves + rainyMoves >= 20) {
+                endGame();
+                return;
+            }
+            currentPlayer = currentPlayer === 'sunny' ? 'rainy' : 'sunny';
+            drawBoard();
+            if (currentPlayer === aiRole) {
+                setTimeout(aiMove, 500);
+            }
+        }
+
+        function endGame() {
+            canvas.removeEventListener('click', handleClick);
+            drawBoard();
+        }
+
+        function aiMove() {
+            if (currentPlayer === aiRole) {
+                let moves = [];
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        if (isValidMove(x, y, board)) {
+                            let score = evaluateMove(x, y, currentPlayer);
+                            if (score !== -Infinity) {
+                                moves.push({ x, y, score });
+                            }
+                        }
+                    }
+                }
+                console.log('AI moves:', moves);
+                if (!moves.length) {
+                    console.log('No valid moves for AI, ending game');
+                    endGame();
+                    return;
+                }
+                moves.sort((a, b) => b.score - a.score);
+                let topMoves = moves.filter(move => Math.abs(move.score - moves[0].score) < 0.5);
+                console.log('Top moves:', topMoves);
+                const bestMove = topMoves[Math.floor(Math.random() * topMoves.length)] || moves[0];
+                console.log('Selected move:', bestMove);
+                attack(bestMove.x, bestMove.y);
+            }
+        }
+
+        function handleClick(event) {
+            if (!playerRole || currentPlayer !== playerRole) {
+                return;
+            }
+            let rect = canvas.getBoundingClientRect();
+            let x = Math.floor((event.clientX - rect.left - 40) / CELL_SIZE);
+            let y = Math.floor((event.clientY - rect.top) / CELL_SIZE);
+            if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+
+            attack(x, y);
+        }
+
+        chooseSunnyBtn.addEventListener('click', () => {
+            playerRole = 'sunny';
+            aiRole = 'rainy';
+            initGame();
+        });
+
+        chooseRainyBtn.addEventListener('click', () => {
+            playerRole = 'rainy';
+            aiRole = 'sunny';
+            initGame();
+        });
+
+        rulesBtn.addEventListener('click', () => {
+            rulesDiv.style.display = 'block';
+        });
+
+        closeRulesBtn.addEventListener('click', () => {
+            rulesDiv.style.display = 'none';
+        });
+
+        restartBtn.addEventListener('click', () => {
+            canvas.removeEventListener('click', handleClick);
+            playerRole = null;
+            aiRole = null;
+            sunnyHearts = [];
+            rainyHearts = [];
+            sunnyMoves = 0;
+            rainyMoves = 0;
+            roleSelection.style.display = 'block';
+            controls.style.display = 'none';
+            statusDiv.style.display = 'none';
+            statusDiv.textContent = '';
+            board = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill('empty'));
+            drawBoard();
+            canvas.addEventListener('click', handleClick);
+        });
+
+        canvas.addEventListener('click', handleClick);
+        drawBoard();
+    </script>
+</body>
+</html>
