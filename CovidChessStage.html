@@ -1,0 +1,966 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>新冠肺炎棋—闖關模式</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+    h1 {
+      font-size: 28px;
+      color: #333;
+      margin: 10px 0;
+    }
+    canvas {
+      border: 2px solid #333;
+      background-color: #fff;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 20px;
+      color: #333;
+    }
+    #score {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #333;
+    }
+    #lives {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #00f;
+    }
+    #mode-selection, #game-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    #author {
+      margin-top: 10px;
+      font-size: 16px;
+      color: #666;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    #rules-panel, #message-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border: 2px solid #333;
+      border-radius: 10px;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    #rules-panel h2, #message-panel h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    #rules-panel p, #message-panel p {
+      margin: 10px 0;
+      line-height: 1.5;
+    }
+    #rules-panel button, #message-panel button {
+      background-color: #ff4444;
+      margin-top: 10px;
+    }
+    #rules-panel button:hover, #message-panel button:hover {
+      background-color: #cc0000;
+    }
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <h1>新冠肺炎棋—闖關模式</h1>
+  <canvas id="board" width="350" height="350"></canvas>
+  <div id="status">請選擇角色</div>
+  <div id="score">紅方: 0 | 白方: 0</div>
+  <div id="lives">時間水晶: ◆◆◆</div>
+  <div id="mode-selection">
+    <button onclick="startGame('red')">扮演病毒（紅方）</button>
+    <button onclick="startGame('white')">扮演醫護（白方）</button>
+  </div>
+  <div id="game-controls" style="display: none;">
+    <button id="rules" onclick="showRules()">規則說明</button>
+    <button id="restart" onclick="resetToModeSelection()">重新開始</button>
+    <button id="rewind" onclick="showRewindConfirm()">時間回溯</button>
+  </div>
+  <div id="author">2020 by FallCloud, 2025 Updated</div>
+  <div id="overlay"></div>
+  <div id="rules-panel">
+    <h2>新冠肺炎棋—闖關模式規則</h2>
+    <p><strong>遊戲流程</strong></p>
+    <p>玩家選擇扮演病毒（紅方）或醫護（白方），與AI對戰，挑戰5個關卡。紅方先手，輪流落子至棋盤填滿或雙方無可走步。每次失敗扣除一顆時間水晶並重啟關卡，三次失敗後遊戲結束。全部通關則獲得勝利。</p>
+    <p><strong>紅方（病毒）步法</strong></p>
+    <p>- <strong>擴散</strong>：落子於紅棋旁（八格相鄰）的空白格，感染上下左右的白棋為紅棋。<br>
+       - <strong>飛沫</strong>：選擇一顆紅棋，跳兩格（直、橫、斜八方向）到空白格，至少感染一顆上下左右的白棋為紅棋。<br>
+       - 紅方優先選擇可感染白棋的擴散或飛沫，無則選無感染的擴散或飛沫。</p>
+    <p><strong>白方（醫護）步法</strong></p>
+    <p>- <strong>救治</strong>：按黑白棋規則落子，翻轉夾住的紅棋為白棋（沿八方向）。<br>
+       - <strong>支援</strong>：落子於白棋旁（上下左右）的空白格，無翻轉效果。</p>
+    <p><strong>棋盤與計分</strong></p>
+    <p>7x7棋盤，含黑格（不可落子）。各關卡有不同黑格與初始棋子配置，難度遞增。遊戲結束時，每顆棋計1分，得分高者勝，平分為平局。</p>
+    <p>2020 by FallCloud, 2025 Updated</p>
+    <button onclick="hideRules()">關閉</button>
+  </div>
+  <div id="message-panel">
+    <h2 id="message-title"></h2>
+    <p id="message-content"></p>
+    <button id="message-confirm" onclick="handleMessageConfirm()">確認</button>
+    <button id="message-cancel" onclick="hideMessage()" style="display: none;">取消</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const statusDiv = document.getElementById('status');
+    const scoreDiv = document.getElementById('score');
+    const livesDiv = document.getElementById('lives');
+    const modeSelection = document.getElementById('mode-selection');
+    const gameControls = document.getElementById('game-controls');
+    const rulesPanel = document.getElementById('rules-panel');
+    const messagePanel = document.getElementById('message-panel');
+    const messageTitle = document.getElementById('message-title');
+    const messageContent = document.getElementById('message-content');
+    const messageConfirm = document.getElementById('message-confirm');
+    const messageCancel = document.getElementById('message-cancel');
+    const rewindButton = document.getElementById('rewind');
+    const overlay = document.getElementById('overlay');
+    const cellSize = 50;
+    const boardSize = 7;
+    let board = [];
+    let currentPlayer = 'red';
+    let gameOver = false;
+    let gameMode = null; // 'red' (玩家紅方), 'white' (玩家白方)
+    let aiPlayer = null; // 'red' 或 'white'
+    let selectedRedPiece = null;
+    let randomWeights = {};
+    let currentStage = 1;
+    let lives = 3;
+    let currentBoardConfig = null;
+    const stageConfigs = {
+      red: [
+        // Stage 1: 病毒誕生
+        {
+          blackCells: [[0,0], [0,3], [0,6], [3,0], [3,3], [3,6], [6,0], [6,3], [6,6]],
+          red: [[2,2], [4,4]],
+          white: [[2,4], [4,2]]
+        },
+        // Stage 2: 病毒擴散
+        {
+          blackCells: [[0,0], [0,1], [0,5], [0,6], [1,0], [1,6], [3,3], [5,0], [5,6], [6,0], [6,1], [6,5], [6,6]],
+          red: [[2,1], [4,5]],
+          white: [[1,4], [5,2]]
+        },
+        // Stage 3: 疫情爆發
+        {
+          blackCells: [[0,0], [0,3], [0,6], [1,0], [1,6], [3,3], [5,0], [5,6], [6,0], [6,3], [6,6]],
+          red: [[2,3], [3,4]],
+          white: [[1,3], [4,1], [4,5]]
+        },
+        // Stage 4: 全球危機
+        {
+          blackCells: [[0,0], [0,5], [0,6], [1,0], [3,3], [5,6], [6,0], [6,1], [6,5], [6,6]],
+          red: [[2,2], [4,4]],
+          white: [[1,4], [3,2], [5,1]]
+        },
+        // Stage 5: 最終決戰
+        {
+          blackCells: [[0,0], [0,6], [3,3], [6,0], [6,6]],
+          red: [[2,2], [4,4]],
+          white: [[1,3], [3,1], [3,5], [5,3]]
+        },
+      ],
+      white: [
+        // Stage 1: 未知警報
+        {
+          blackCells: [[0,0], [0,6], [3,3], [6,0], [6,6]],
+          red: [[2,2], [4,4]],
+          white: [[2,4], [4,2]]
+        },
+        // Stage 2: 緊急應對
+        {
+          blackCells: [[0,0], [0,1], [0,5], [0,6], [1,0], [1,6], [3,3], [5,0], [5,6], [6,0], [6,1], [6,5], [6,6]],
+          red: [[2,1], [4,5]],
+          white: [[1,4], [5,2]]
+        },
+        // Stage 3: 醫療動員
+        {
+          blackCells: [[0,0], [0,3], [0,6], [1,0], [1,6], [3,2], [3,4], [5,0], [5,6], [6,0], [6,3], [6,6]],
+          red: [[1,3], [3,3], [5,3]],
+          white: [[1,4], [5,2]]
+        },
+        // Stage 4: 全面抗疫
+        {
+          blackCells: [[0,0], [0,5], [0,6], [1,0], [2,2], [2,4], [4,2], [4,4], [5,6], [6,0], [6,5], [6,6]],
+          red: [[3,1], [3,3], [3,5]],
+          white: [[0,3], [6,3]]
+        },
+        // Stage 5: 戰勝病毒
+        {
+          blackCells: [[0,0], [0,3], [0,6], [1,3], [1,5], [3,0], [3,1], [3,5], [3,6], [5,3], [5,5], [6,0], [6,3], [6,6]],
+          red: [[1,1], [1,5], [5,1], [5,5]],
+          white: [[2,4], [4,2]]
+        }
+      ]
+    };
+    const stageNames = {
+      red: [
+        'Stage 1: 病毒誕生',
+        'Stage 2: 病毒擴散',
+        'Stage 3: 疫情爆發',
+        'Stage 4: 全球危機',
+        'Stage 5: 最終決戰'
+      ],
+      white: [
+        'Stage 1: 未知警報',
+        'Stage 2: 緊急應對',
+        'Stage 3: 醫療動員',
+        'Stage 4: 全面抗疫',
+        'Stage 5: 戰勝病毒'
+      ]
+    };
+
+    function initBoard(config) {
+      try {
+        board = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+        config.blackCells.forEach(([r, c]) => {
+          if (r >= 0 && r < boardSize && c >= 0 && c < boardSize) {
+            board[r][c] = 'black';
+          } else {
+            console.warn(`Invalid black cell position: [${r}, ${c}]`);
+          }
+        });
+        config.red.forEach(([r, c]) => {
+          if (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board[r][c] === null) {
+            board[r][c] = 'red';
+          } else {
+            console.warn(`Invalid red piece position: [${r}, ${c}]`);
+          }
+        });
+        config.white.forEach(([r, c]) => {
+          if (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board[r][c] === null) {
+            board[r][c] = 'white';
+          } else {
+            console.warn(`Invalid white piece position: [${r}, ${c}]`);
+          }
+        });
+        selectedRedPiece = null;
+        randomWeights = {
+          flip: 3 * (0.9 + Math.random() * 0.2),
+          stability: 1 * (0.9 + Math.random() * 0.2),
+          future: 0.5 * (0.9 + Math.random() * 0.2),
+          opponent: 0.75 * (0.9 + Math.random() * 0.2),
+          corner: 3 * (0.9 + Math.random() * 0.2)
+        };
+      } catch (e) {
+        console.error('initBoard error:', e);
+      }
+    }
+
+    function drawBoard() {
+      try {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!gameOver && gameMode && currentPlayer !== aiPlayer) {
+          const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+          const moveMap = new Map();
+          if (currentPlayer === 'red') {
+            if (selectedRedPiece) {
+              const moves = validMoves.filter(m => m.fromR === selectedRedPiece[0] && m.fromC === selectedRedPiece[1] && m.type === 'droplet');
+              moves.forEach(move => {
+                moveMap.set(`${move.r},${move.c}`, 'rgba(255, 255, 0, 0.3)');
+              });
+              moveMap.set(`${selectedRedPiece[0]},${selectedRedPiece[1]}`, 'rgba(255, 255, 0, 0.3)');
+            } else {
+              const hasFlippingMoves = validMoves.some(m => m.flipped.length > 0);
+              const dropletPieces = new Set();
+              validMoves.forEach(move => {
+                if (move.type === 'droplet' && (!hasFlippingMoves || move.flipped.length > 0)) {
+                  dropletPieces.add(`${move.fromR},${move.fromC}`);
+                } else if (move.type === 'spread' && (!hasFlippingMoves || move.flipped.length > 0)) {
+                  moveMap.set(`${move.r},${move.c}`, 'rgba(255, 0, 0, 0.3)');
+                }
+              });
+              dropletPieces.forEach(piece => {
+                moveMap.set(piece, 'rgba(255, 255, 0, 0.3)');
+              });
+            }
+          } else {
+            validMoves.forEach(move => {
+              const key = `${move.r},${move.c}`;
+              const color = move.flipped.length > 0 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(0, 255, 0, 0.3)';
+              moveMap.set(key, color);
+            });
+          }
+          moveMap.forEach((color, key) => {
+            const [r, c] = key.split(',').map(Number);
+            const x = c * cellSize;
+            const y = r * cellSize;
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, cellSize, cellSize);
+          });
+        }
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            const x = c * cellSize;
+            const y = r * cellSize;
+            ctx.strokeStyle = '#333';
+            ctx.strokeRect(x, y, cellSize, cellSize);
+            if (board[r][c] === 'black') {
+              ctx.fillStyle = '#333';
+              ctx.fillRect(x, y, cellSize, cellSize);
+            } else if (board[r][c] === 'red') {
+              ctx.fillStyle = '#ff0000';
+              ctx.beginPath();
+              ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#000';
+              ctx.stroke();
+            } else if (board[r][c] === 'white') {
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#000';
+              ctx.stroke();
+            }
+          }
+        }
+      } catch (e) {
+        console.error('drawBoard error:', e);
+        statusDiv.textContent = '繪製棋盤失敗，請重新載入頁面';
+      }
+    }
+
+    function isBlackCell(r, c) {
+      try {
+        return currentBoardConfig && currentBoardConfig.blackCells.some(([br, bc]) => br === r && bc === c);
+      } catch (e) {
+        console.error('isBlackCell error:', e);
+        return false;
+      }
+    }
+
+    function getValidRedMoves(tempBoard = board) {
+      try {
+        const priorityMoves = [];
+        const nonFlippingMoves = [];
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
+            let flipped = [];
+            let adjacentRed = false;
+            for (let dr = -1; dr <= 1; dr++) {
+              for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
+                  adjacentRed = true;
+                  [[0,1], [0,-1], [1,0], [-1,0]].forEach(([ddr, ddc]) => {
+                    const nnr = r + ddr, nnc = c + ddc;
+                    if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && tempBoard[nnr][nnc] === 'white') {
+                      flipped.push([nnr, nnc]);
+                    }
+                  });
+                  break;
+                }
+              }
+            }
+            if (adjacentRed) {
+              const move = { r, c, flipped, type: 'spread', fromR: null, fromC: null };
+              if (flipped.length > 0) {
+                priorityMoves.push(move);
+              } else {
+                nonFlippingMoves.push(move);
+              }
+            }
+          }
+        }
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== 'red') continue;
+            const directions = [
+              [-2,0], [2,0], [0,-2], [0,2],
+              [-2,-2], [-2,2], [2,-2], [2,2]
+            ];
+            for (let [dr, dc] of directions) {
+              const nr = r + dr, nc = c + dc;
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize &&
+                  !isBlackCell(nr, nc) && tempBoard[nr][nc] === null) {
+                let flipped = [];
+                [[0,1], [0,-1], [1,0], [-1,0]].forEach(([ddr, ddc]) => {
+                  const nnr = nr + ddr, nnc = nc + ddc;
+                  if (nnr >= 0 && nnr < boardSize && nnc >= 0 && nnc < boardSize && tempBoard[nnr][nnc] === 'white') {
+                    flipped.push([nnr, nnc]);
+                  }
+                });
+                const move = { r: nr, c: nc, flipped, type: 'droplet', fromR: r, fromC: c };
+                if (flipped.length > 0) {
+                  priorityMoves.push(move);
+                } else {
+                  nonFlippingMoves.push(move);
+                }
+              }
+            }
+          }
+        }
+        console.log('Valid red moves:', priorityMoves.length > 0 ? priorityMoves : nonFlippingMoves);
+        return priorityMoves.length > 0 ? priorityMoves : nonFlippingMoves;
+      } catch (e) {
+        console.error('getValidRedMoves error:', e);
+        return [];
+      }
+    }
+
+    function getValidWhiteMoves(tempBoard = board) {
+      try {
+        const moves = [];
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
+            let flipped = [];
+            [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]].forEach(([dr, dc]) => {
+              let nr = r + dr, nc = c + dc;
+              let line = [];
+              while (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'red') {
+                line.push([nr, nc]);
+                nr += dr;
+                nc += dc;
+              }
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white' && line.length > 0) {
+                flipped.push(...line);
+              }
+            });
+            if (flipped.length > 0) {
+              moves.push({ r, c, flipped, type: 'cure' });
+            }
+          }
+        }
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (tempBoard[r][c] !== null || isBlackCell(r, c)) continue;
+            for (let [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0]]) {
+              const nr = r + dr, nc = c + dc;
+              if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === 'white') {
+                if (!moves.some(m => m.r === r && m.c === c)) {
+                  moves.push({ r, c, flipped: [], type: 'support' });
+                }
+                break;
+              }
+            }
+          }
+        }
+        console.log('Valid white moves:', moves);
+        return moves;
+      } catch (e) {
+        console.error('getValidWhiteMoves error:', e);
+        return [];
+      }
+    }
+
+    function makeMove(r, c, flipped, player, moveType, fromR, fromC) {
+      try {
+        console.log(`Making move: player=${player}, type=${moveType}, to=[${r},${c}], from=[${fromR},${fromC}], flipped=`, flipped);
+        if (moveType === 'droplet') {
+          board[fromR][fromC] = null;
+          board[r][c] = 'red';
+          flipped.forEach(([fr, fc]) => board[fr][fc] = 'red');
+        } else {
+          board[r][c] = player;
+          flipped.forEach(([fr, fc]) => board[fr][fc] = player);
+        }
+        selectedRedPiece = null;
+        currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
+        updateStatus();
+        drawBoard();
+        checkGameOver();
+        if (!gameOver && gameMode && currentPlayer === aiPlayer) {
+          setTimeout(makeAIMove, 500);
+        }
+      } catch (e) {
+        console.error('makeMove error:', e);
+      }
+    }
+
+    function evaluateMove(move, player) {
+      try {
+        let score = 0;
+        score += move.flipped.length * randomWeights.flip;
+        score += positionWeights[move.r][move.c] * randomWeights.stability;
+        let stability = 0;
+        [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
+          const nr = move.r + dr, nc = move.c + dc;
+          if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && isBlackCell(nr, nc)) {
+            stability += 2;
+          }
+        });
+        score += stability * randomWeights.stability;
+        if (isCorner(move.r, move.c)) {
+          score += randomWeights.corner;
+        }
+        if (player === 'red') {
+          const tempBoard = board.map(row => row.slice());
+          if (move.type === 'droplet') {
+            tempBoard[move.fromR][move.fromC] = null;
+            tempBoard[move.r][move.c] = 'red';
+            move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = 'red');
+          } else {
+            tempBoard[move.r][move.c] = 'red';
+            move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = 'red');
+          }
+          let emptyNeighbors = 0;
+          [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
+            const nr = move.r + dr, nc = move.c + dc;
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize && tempBoard[nr][nc] === null && !isBlackCell(nr, nc)) {
+              emptyNeighbors++;
+            }
+          });
+          score += Math.min(emptyNeighbors * randomWeights.future, 2);
+        }
+        const tempBoard = board.map(row => row.slice());
+        if (move.type === 'droplet') {
+          tempBoard[move.fromR][move.fromC] = null;
+          tempBoard[move.r][move.c] = player;
+          move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
+        } else {
+          tempBoard[move.r][move.c] = player;
+          move.flipped.forEach(([fr, fc]) => tempBoard[fr][fc] = player);
+        }
+        const opponent = player === 'red' ? 'white' : 'red';
+        const opponentMoves = opponent === 'red' ? getValidRedMoves(tempBoard) : getValidWhiteMoves(tempBoard);
+        score -= opponentMoves.length * randomWeights.opponent;
+        return score;
+      } catch (e) {
+        console.error('evaluateMove error:', e);
+        return 0;
+      }
+    }
+
+    function makeAIMove() {
+      try {
+        if (gameOver) return;
+        const validMoves = currentPlayer === 'red' ? getValidRedMoves() : getValidWhiteMoves();
+        if (validMoves.length === 0) {
+          currentPlayer = currentPlayer === 'red' ? 'white' : 'red';
+          updateStatus();
+          checkGameOver();
+          return;
+        }
+        const scoredMoves = validMoves.map(move => ({
+          move,
+          score: evaluateMove(move, currentPlayer)
+        }));
+        const maxScore = Math.max(...scoredMoves.map(sm => sm.score));
+        const bestMoves = scoredMoves.filter(sm => sm.score >= maxScore - 1);
+        const selectedMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+        console.log('AI selected move:', selectedMove);
+        makeMove(selectedMove.r, selectedMove.c, selectedMove.flipped, currentPlayer, selectedMove.type, selectedMove.fromR, selectedMove.fromC);
+      } catch (e) {
+        console.error('makeAIMove error:', e);
+      }
+    }
+
+    function updateStatus() {
+      try {
+        if (gameOver) return;
+        const redMoves = getValidRedMoves();
+        const whiteMoves = getValidWhiteMoves();
+        if (currentPlayer === 'red' && redMoves.length === 0) {
+          if (whiteMoves.length > 0) {
+            currentPlayer = 'white';
+            statusDiv.textContent = `${stageNames[gameMode][currentStage-1]} - 紅方無可行動點，白方繼續`;
+          } else {
+            gameOver = true;
+            checkGameOver();
+          }
+        } else if (currentPlayer === 'white' && whiteMoves.length === 0) {
+          if (redMoves.length > 0) {
+            currentPlayer = 'red';
+            statusDiv.textContent = `${stageNames[gameMode][currentStage-1]} - 白方無可行動點，紅方繼續`;
+          } else {
+            gameOver = true;
+            checkGameOver();
+          }
+        } else {
+          statusDiv.textContent = `${stageNames[gameMode][currentStage-1]} - ${currentPlayer === 'red' ? '紅方（病毒）回合' : '白方（醫護）回合'}`;
+        }
+        updateScore();
+        updateLives();
+      } catch (e) {
+        console.error('updateStatus error:', e);
+      }
+    }
+
+    function updateScore() {
+      try {
+        let redScore = 0, whiteScore = 0;
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (board[r][c] === 'red') redScore++;
+            else if (board[r][c] === 'white') whiteScore++;
+          }
+        }
+        scoreDiv.textContent = `紅方: ${redScore} | 白方: ${whiteScore}`;
+      } catch (e) {
+        console.error('updateScore error:', e);
+      }
+    }
+
+    function updateLives() {
+      try {
+        let livesText = '時間水晶: ';
+        for (let i = 0; i < 3; i++) {
+          livesText += i < lives ? '◆' : '◇';
+        }
+        livesDiv.textContent = livesText;
+        rewindButton.textContent = lives > 0 ? '時間回溯' : '放棄';
+        rewindButton.disabled = gameOver;
+      } catch (e) {
+        console.error('updateLives error:', e);
+      }
+    }
+
+    function checkGameOver() {
+      try {
+        if (!gameOver) return;
+        let redScore = 0, whiteScore = 0;
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (board[r][c] === 'red') redScore++;
+            else if (board[r][c] === 'white') whiteScore++;
+          }
+        }
+        let result;
+        if (gameMode === 'red') {
+          result = redScore > whiteScore ? 'win' : redScore < whiteScore ? 'lose' : 'draw';
+        } else {
+          result = whiteScore > redScore ? 'win' : whiteScore < redScore ? 'lose' : 'draw';
+        }
+        if (result === 'win') {
+          if (currentStage < 5) {
+            showMessage('關卡勝利！', `你成功通過${stageNames[gameMode][currentStage-1]}！準備進入下一關。`, () => {
+              currentStage++;
+              currentBoardConfig = null;
+              initGame();
+            });
+          } else {
+            showMessage('遊戲破關！', '恭喜你！成功通過所有關卡，戰勝了病毒！', resetToModeSelection);
+          }
+        } else {
+          if (lives > 1) {
+            showMessage('關卡失敗', '水晶的力量回溯了時間！點擊確認重新挑戰本關卡。', () => {
+              lives--;
+              initGame();
+            });
+          } else {
+            showMessage('遊戲結束', '所有時間水晶已耗盡，挑戰失敗！', resetToModeSelection);
+          }
+        }
+      } catch (e) {
+        console.error('checkGameOver error:', e);
+      }
+    }
+
+    function showRules() {
+      try {
+        rulesPanel.style.display = 'block';
+        overlay.style.display = 'block';
+      } catch (e) {
+        console.error('showRules error:', e);
+      }
+    }
+
+    function hideRules() {
+      try {
+        rulesPanel.style.display = 'none';
+        overlay.style.display = 'none';
+      } catch (e) {
+        console.error('hideRules error:', e);
+      }
+    }
+
+    function showMessage(title, content, onConfirm, showCancel = false) {
+      try {
+        messageTitle.textContent = title;
+        messageContent.textContent = content;
+        messagePanel.style.display = 'block';
+        overlay.style.display = 'block';
+        messageConfirm.onclick = () => {
+          hideMessage();
+          onConfirm();
+        };
+        messageCancel.style.display = showCancel ? 'inline-block' : 'none';
+      } catch (e) {
+        console.error('showMessage error:', e);
+      }
+    }
+
+    function showRewindConfirm() {
+      try {
+        if (lives > 0) {
+          showMessage('確認回溯時間', '是否消耗一顆時間水晶重新開始本關卡？', () => {
+            lives--;
+            initGame();
+          }, true);
+        } else {
+          showMessage('挑戰失敗', '所有時間水晶已耗盡，挑戰失敗！', resetToModeSelection);
+        }
+      } catch (e) {
+        console.error('showRewindConfirm error:', e);
+      }
+    }
+
+    function hideMessage() {
+      try {
+        messagePanel.style.display = 'none';
+        overlay.style.display = 'none';
+      } catch (e) {
+        console.error('hideMessage error:', e);
+      }
+    }
+
+    function handleMessageConfirm() {
+      try {
+        messageConfirm.onclick();
+      } catch (e) {
+        console.error('handleMessageConfirm error:', e);
+      }
+    }
+
+    function startGame(mode) {
+      try {
+        console.log('Starting game with mode:', mode);
+        gameMode = mode;
+        aiPlayer = mode === 'red' ? 'white' : 'red';
+        modeSelection.style.display = 'none';
+        gameControls.style.display = 'flex';
+        currentStage = 1;
+        lives = 3;
+        currentBoardConfig = null;
+        initGame();
+        if (gameMode === 'white' && currentPlayer === 'red') {
+          setTimeout(makeAIMove, 500);
+        }
+      } catch (e) {
+        console.error('startGame error:', e);
+        statusDiv.textContent = '遊戲初始化失敗，請重新載入頁面';
+      }
+    }
+
+    function resetToModeSelection() {
+      try {
+        console.log('Resetting to mode selection');
+        gameMode = null;
+        aiPlayer = null;
+        gameOver = false;
+        selectedRedPiece = null;
+        currentStage = 1;
+        lives = 3;
+        currentBoardConfig = null;
+        modeSelection.style.display = 'flex';
+        gameControls.style.display = 'none';
+        statusDiv.textContent = '請選擇角色';
+        initBoard({ blackCells: [[0,0], [0,6], [6,0], [6,6], [3,3]], red: [[2,2], [4,4]], white: [[2,4], [4,2]] });
+        updateScore();
+        updateLives();
+        drawBoard();
+      } catch (e) {
+        console.error('resetToModeSelection error:', e);
+      }
+    }
+
+    function initGame() {
+      try {
+        console.log('Initializing game for stage:', currentStage);
+        currentBoardConfig = stageConfigs[gameMode][currentStage-1];
+        initBoard(currentBoardConfig);
+        currentPlayer = 'red';
+        gameOver = false;
+        updateStatus();
+        updateScore();
+        updateLives();
+        drawBoard();
+        showMessage(stageNames[gameMode][currentStage-1], `準備挑戰${stageNames[gameMode][currentStage-1]}！`, () => {
+          if (gameMode === 'white' && currentPlayer === 'red') {
+            setTimeout(makeAIMove, 500);
+          }
+        });
+      } catch (e) {
+        console.error('initGame error:', e);
+        statusDiv.textContent = '遊戲初始化失敗，請重新載入頁面';
+      }
+    }
+
+    const stableCells = [
+      [1,1], [1,2], [2,1],
+      [1,4], [1,5], [2,5],
+      [5,1], [5,2], [6,1],
+      [5,4], [5,5], [6,5]
+    ];
+
+    const positionWeights = [
+      [0, 0, 2, 2, 2, 0, 0],
+      [0, 4, 4, 3, 4, 4, 0],
+      [2, 4, 4, 4, 4, 4, 2],
+      [2, 3, 4, 0, 4, 3, 2],
+      [2, 4, 4, 4, 4, 4, 2],
+      [0, 4, 4, 3, 4, 4, 0],
+      [0, 0, 2, 2, 2, 0, 0]
+    ];
+
+    function isCorner(r, c) {
+      try {
+        return stableCells.some(([sr, sc]) => sr === r && sc === c);
+      } catch (e) {
+        console.error('isCorner error:', e);
+        return false;
+      }
+    }
+
+    canvas.addEventListener('click', (e) => {
+      try {
+        console.log('Canvas clicked, gameMode:', gameMode, 'currentPlayer:', currentPlayer, 'aiPlayer:', aiPlayer, 'gameOver:', gameOver);
+        if (gameOver || gameMode === null || currentPlayer === aiPlayer) {
+          console.log('Click ignored: gameOver or not player turn');
+          return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const r = Math.floor(y / cellSize);
+        const c = Math.floor(x / cellSize);
+        console.log(`Clicked at canvas coords: (${x}, ${y}), mapped to board: [${r}, ${c}]`);
+        if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) {
+          console.log('Click outside board bounds');
+          return;
+        }
+        if (currentPlayer === 'red') {
+          const validMoves = getValidRedMoves();
+          console.log('Red player valid moves:', validMoves);
+          if (selectedRedPiece) {
+            console.log('Selected red piece:', selectedRedPiece);
+            const move = validMoves.find(m => m.r === r && m.c === c && m.fromR === selectedRedPiece[0] && m.fromC === selectedRedPiece[1] && m.type === 'droplet');
+            if (move) {
+              console.log('Executing droplet move:', move);
+              makeMove(r, c, move.flipped, currentPlayer, move.type, move.fromR, move.fromC);
+            } else {
+              console.log('No valid droplet move, deselecting piece');
+              selectedRedPiece = null;
+              drawBoard();
+            }
+          } else {
+            if (board[r][c] === 'red' && validMoves.some(m => m.fromR === r && m.fromC === c && m.type === 'droplet')) {
+              console.log('Selecting red piece for droplet:', [r, c]);
+              selectedRedPiece = [r, c];
+              drawBoard();
+            } else {
+              const move = validMoves.find(m => m.r === r && m.c === c && m.type === 'spread');
+              if (move) {
+                console.log('Executing spread move:', move);
+                makeMove(r, c, move.flipped, currentPlayer, move.type, null, null);
+              } else {
+                console.log('No valid spread move at:', [r, c]);
+              }
+            }
+          }
+        } else {
+          const validMoves = getValidWhiteMoves();
+          console.log('White player valid moves:', validMoves);
+          const move = validMoves.find(m => m.r === r && m.c === c);
+          if (move) {
+            console.log('Executing white move:', move);
+            makeMove(r, c, move.flipped, currentPlayer, move.type, null, null);
+          } else {
+            console.log('No valid white move at:', [r, c]);
+          }
+        }
+      } catch (e) {
+        console.error('canvas click error:', e.message, e.stack);
+      }
+    });
+
+    try {
+      console.log('Initializing game board');
+      initBoard({ blackCells: [[0,0], [0,6], [6,0], [6,6], [3,3]], red: [[2,2], [4,4]], white: [[2,4], [4,2]] });
+      updateScore();
+      updateLives();
+      drawBoard();
+    } catch (e) {
+      console.error('Initial game setup error:', e);
+      statusDiv.textContent = '遊戲載入失敗，請重新載入頁面';
+    }
+  </script>
+</body>
+</html>
