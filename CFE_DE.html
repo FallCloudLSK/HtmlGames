@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>五行戰鬥牌牌組編輯器</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
@@ -240,18 +240,203 @@
         }
        
         @media (max-width: 640px) {
-            body { padding: 8px; }
-            .container { border-radius: 12px; }
-            header { padding: 16px 18px; flex-direction: column; align-items: stretch; }
-            h1 { font-size: 22px; justify-content: center; }
-            .header-right { justify-content: center; }
-            .code-box { min-width: auto; flex: none; width: 100%; }
-            .code-input { font-size: 17px; }
-            table { font-size: 15px; min-width: 620px; }
-            .cell { font-size: 24px; min-width: 48px; padding: 10px 6px; }
-            th { padding: 10px 6px; font-size: 13px; }
-            .attr-header { width: 62px; font-size: 16px; padding-left: 12px; }
-            .number-btn { width: 48px; height: 48px; font-size: 24px; }
+            body { padding: 6px; }
+            .container { border-radius: 10px; }
+
+            /* ---- Header 緊湊 ---- */
+            header {
+                padding: 10px 12px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            h1 {
+                font-size: 18px;
+                justify-content: center;
+                gap: 8px;
+            }
+            .header-right {
+                justify-content: center;
+                gap: 6px;
+                width: 100%;
+            }
+            .code-box {
+                min-width: auto;
+                flex: 1 1 100%;
+                width: 100%;
+                padding: 6px 10px;
+                font-size: 14px;
+                letter-spacing: 1px;
+                gap: 6px;
+                flex-wrap: wrap;
+                border-radius: 12px;
+            }
+            .code-input {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 6px 8px;
+                font-size: 14px;
+            }
+            .btn {
+                padding: 6px 14px;
+                font-size: 13px;
+                flex: 1 1 auto;
+            }
+            .code-box .btn {
+                flex: 1 1 100%;
+            }
+
+            /* ---- 表格 → 單列卡片 ---- */
+            .table-wrapper {
+                overflow-x: visible;
+                -webkit-overflow-scrolling: auto;
+                padding: 6px 6px 4px;
+            }
+            table {
+                min-width: 0;
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 0;
+                display: block;
+            }
+            thead { display: none; }
+            tbody, tfoot { display: block; }
+
+            tbody tr, tfoot tr {
+                display: grid;
+                grid-template-columns: 36px repeat(5, minmax(0, 1fr)) 58px 58px;
+                gap: 3px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+                padding: 4px;
+                margin-bottom: 6px;
+                align-items: stretch;
+            }
+
+            tbody tr td, tfoot tr td {
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 4px 2px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+
+            /* 屬性名稱 */
+            .attr-header {
+                grid-column: 1;
+                width: auto;
+                text-align: center !important;
+                padding: 4px !important;
+                padding-left: 4px !important;
+                font-size: 16px;
+                border: none !important;
+                border-radius: 6px;
+                font-weight: 700;
+            }
+
+            /* 5 個等級格子 */
+            .cell {
+                font-size: 18px;
+                min-width: 0;
+                padding: 2px;
+            }
+            .cell::before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 400;
+                color: #666;
+                margin-bottom: 1px;
+            }
+
+            /* 屬性小計 */
+            .subtotal {
+                background: #f9f9f9;
+                font-size: 13px;
+            }
+            [id^="attrCards"]::before {
+                content: '張數';
+                display: block;
+                font-size: 11px;
+                font-weight: 400;
+                color: #666;
+                margin-bottom: 1px;
+            }
+            [id^="attrLevel"]::before {
+                content: '等級和';
+                display: block;
+                font-size: 11px;
+                font-weight: 400;
+                color: #666;
+                margin-bottom: 1px;
+            }
+
+            /* 總計列 */
+            .total-row td {
+                font-size: 13px !important;
+                padding: 4px 2px;
+            }
+            /* 首欄：「全牌組總計」→ 視覺縮為「總計」 */
+            .total-row td:first-child {
+                grid-column: 1;
+                font-size: 0 !important;
+                text-align: center !important;
+                padding: 4px !important;
+                padding-left: 4px !important;
+                background: #1a73e8;
+                border-radius: 6px;
+                border: none;
+                line-height: 1;
+            }
+            .total-row td:first-child::before {
+                content: '總計';
+                font-size: 13px;
+                font-weight: 700;
+                color: white;
+            }
+            .total-row td:not(:first-child)::before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 400;
+                opacity: 0.85;
+                margin-bottom: 1px;
+            }
+            .total-row #totalCards,
+            .total-row #totalLevel {
+                font-size: 14px !important;
+            }
+
+            /* ---- Info 壓縮：隱藏操作提示，保留驗證狀態 ---- */
+            .info {
+                padding: 8px 12px;
+                font-size: 12px;
+                gap: 6px;
+                flex-direction: column;
+            }
+            .info > div:first-child { display: none; }
+            .info > div:last-child { text-align: center !important; }
+
+            /* Copyright */
+            .copyright {
+                padding: 6px 12px 10px;
+                font-size: 11px;
+            }
+
+            /* Popup */
+            .number-popup {
+                max-width: calc(100vw - 20px);
+                padding: 6px;
+                gap: 4px;
+            }
+            .number-btn {
+                width: 44px;
+                height: 44px;
+                font-size: 22px;
+            }
         }
     </style>
 </head>
@@ -287,13 +472,13 @@
                 <tfoot>
                     <tr class="total-row">
                         <td style="text-align:left; padding-left:20px;">全牌組總計</td>
-                        <td id="totalLv1">0</td>
-                        <td id="totalLv2">0</td>
-                        <td id="totalLv3">0</td>
-                        <td id="totalLv4">0</td>
-                        <td id="totalLv5">0</td>
-                        <td id="totalCards" style="font-size:22px;">0</td>
-                        <td id="totalLevel" style="font-size:22px;">0</td>
+                        <td id="totalLv1" data-label="1級">0</td>
+                        <td id="totalLv2" data-label="2級">0</td>
+                        <td id="totalLv3" data-label="3級">0</td>
+                        <td id="totalLv4" data-label="4級">0</td>
+                        <td id="totalLv5" data-label="5級">0</td>
+                        <td id="totalCards" data-label="總張數" style="font-size:22px;">0</td>
+                        <td id="totalLevel" data-label="總等級" style="font-size:22px;">0</td>
                     </tr>
                 </tfoot>
             </table>
@@ -412,6 +597,7 @@
                 cell.className = `cell ${attrColors[a]}`;
                 cell.dataset.attr = a;
                 cell.dataset.level = l;
+                cell.dataset.label = (l + 1) + '級';
                 cell.textContent = counts[a][l];
                 cell.addEventListener('click', function(e) {
                     e.stopImmediatePropagation();
