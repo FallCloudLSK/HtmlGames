@@ -262,7 +262,7 @@
             <div class="header-right">
                 <div class="code-box">
                     代碼：
-                    <input id="codeInput" class="code-input" type="text" maxlength="10" placeholder="輸入10字元代碼">
+                    <input id="codeInput" class="code-input" type="text" maxlength="50" placeholder="輸入代碼 或 明文牌組(25碼數字)">
                     <button onclick="importCode()" class="btn">匯入</button>
                 </div>
                 <button onclick="generateCode()" class="btn">產出代碼</button>
@@ -303,7 +303,8 @@
                 📌 <strong>操作方式：</strong><br>
                 點擊任意格子 → 正下方跳出數字按鈕（0~4 或 0~3）<br>
                 直接點選即可設定張數 • 點其他地方自動關閉<br>
-                <span style="color:#1a73e8;">手機版請左右滑動表格查看完整內容</span>
+                <span style="color:#1a73e8;">匯入支援：代碼 或 明文牌組(25碼數字)</span><br>
+                <span style="color:#1a73e8;">空白、/、換行等分隔皆可 • 手機版請左右滑動表格</span>
             </div>
             <div style="text-align:right;">
                 ✅ 總張數必須 <strong>剛好 60</strong><br>
@@ -398,7 +399,6 @@
         tbody.innerHTML = '';
         for (let a = 0; a < 5; a++) {
             const row = document.createElement('tr');
-
             const attrCell = document.createElement('td');
             attrCell.className = `attr-header ${attrColors[a]}`;
             attrCell.style.backgroundColor = attrBg[a];
@@ -504,7 +504,6 @@
 
     function decodeDeck(code) {
         if (code.length !== 10) return false;
-
         let index = 0n;
         for (let char of code) {
             const val = alphabet.indexOf(char);
@@ -514,7 +513,6 @@
 
         const newCounts = Array(5).fill().map(() => Array(5).fill(0));
         let temp = index;
-
         for (let i = 24; i >= 0; i--) {
             const base = bases[i];
             const val = Number(temp % BigInt(base));
@@ -538,10 +536,38 @@
         return true;
     }
 
-    // === 修改重點：只有合法牌組才能產出代碼 ===
-    function generateCode() {
-        const isValid = calculateTotals();   // 重新計算並取得合法狀態
+    function parsePlainDeck(str) {
+        const digits = str.replace(/\D/g, '');
+        if (digits.length !== 25) return false;
 
+        const newCounts = Array(5).fill().map(() => Array(5).fill(0));
+
+        for (let i = 0; i < 25; i++) {
+            const val = parseInt(digits[i]);
+            const attr = Math.floor(i / 5);
+            const level = i % 5;
+            const max = (level < 3) ? 4 : 3;
+
+            if (val < 0 || val > max) return false;
+            newCounts[attr][level] = val;
+        }
+
+        let totalC = 0, totalL = 0;
+        for (let a = 0; a < 5; a++) {
+            for (let l = 0; l < 5; l++) {
+                const n = newCounts[a][l];
+                totalC += n;
+                totalL += (l + 1) * n;
+            }
+        }
+        if (totalC !== 60 || totalL > 170) return false;
+
+        counts = newCounts;
+        return true;
+    }
+
+    function generateCode() {
+        const isValid = calculateTotals();
         if (!isValid) {
             showModal('❌ 無法產出代碼', '牌組不合法！<br>請確認：<br>• 總張數必須剛好 60 張<br>• 總等級必須 ≤ 170', 'error');
             return;
@@ -557,16 +583,27 @@
     }
 
     function importCode() {
-        const code = document.getElementById('codeInput').value.trim();
-        if (code.length !== 10) {
-            showModal('❌ 格式錯誤', '代碼必須是 10 個字元！', 'error');
+        let input = document.getElementById('codeInput').value.trim();
+        if (input === '') {
+            showModal('❌ 輸入空白', '請輸入代碼 或 明文牌組構成', 'error');
             return;
         }
-        if (decodeDeck(code)) {
+
+        let success = false;
+
+        if (input.length === 10) {
+            if (decodeDeck(input)) success = true;
+        }
+
+        if (!success) {
+            if (parsePlainDeck(input)) success = true;
+        }
+
+        if (success) {
             renderTable();
             showModal('✅ 匯入成功', '牌組已正確載入！', 'success');
         } else {
-            showModal('❌ 匯入失敗', '此代碼無效或牌組不合法（總張數必須剛好 60 張）', 'error');
+            showModal('❌ 匯入失敗', '此輸入無效或牌組不合法<br>（請輸入正確的代碼 或 25碼數字的明文牌組）', 'error');
         }
     }
 
