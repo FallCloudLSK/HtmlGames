@@ -29,6 +29,14 @@
         #char-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
         .char-card { background: #3c3024; padding: 10px 5px; border-radius: 6px; cursor: pointer; text-align: center; border: 2px solid transparent; font-weight: bold; font-size: 14px; color: #d2b48c; }
         .char-card.selected { border-color: #ffd700; background: #5c4033; color: #ff9900; box-shadow: inset 0 0 8px rgba(255,215,0,0.3); }
+        
+        /* 速度調整選單 */
+        .setting-section { background: #1c140e; border: 1px solid #5c4033; border-radius: 6px; padding: 8px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+        .setting-label { font-size: 14px; font-weight: bold; color: #ffd700; }
+        .speed-options { display: flex; gap: 6px; }
+        .speed-btn { background: #3c3024; color: #d2b48c; border: 1px solid #5c4033; border-radius: 4px; padding: 4px 12px; font-size: 13px; font-weight: bold; cursor: pointer; }
+        .speed-btn.active { background: #ff9900; color: #1c140e; border-color: #ffd700; box-shadow: 0 0 5px #ff9900; }
+
         #detail-panel { background: #1c140e; border: 1px solid #5c4033; border-radius: 6px; padding: 8px; min-height: 110px; margin-bottom: 10px; }
         #detail-title { font-weight: bold; color: #ffd700; margin-bottom: 2px; font-size: 14px; }
         #detail-stats { font-size: 11px; color: #87cefa; margin-bottom: 4px; }
@@ -136,6 +144,16 @@
 
     <div id="char-select">
         <h3 style="text-align:center; margin: 0 0 8px 0; color: #ffd700;">華山論球 - 選擇你的俠客</h3>
+        
+        <div class="setting-section">
+            <span class="setting-label">對決節奏：</span>
+            <div class="speed-options">
+                <button id="speed-btn-slow" class="speed-btn active" onclick="setSpeedMultiplier(1.0, this)">慢</button>
+                <button id="speed-btn-med" class="speed-btn" onclick="setSpeedMultiplier(1.25, this)">中</button>
+                <button id="speed-btn-fast" class="speed-btn" onclick="setSpeedMultiplier(1.5, this)">快</button>
+            </div>
+        </div>
+
         <div id="char-list"></div>
         <div id="detail-panel">
             <div id="detail-title">-</div>
@@ -186,7 +204,7 @@
     <div id="game-over-screen">
         <div id="result-title">-</div>
         <p id="result-desc" style="color:#ba9a7a;"></p>
-        <button id="restart-btn" onclick="location.reload()">重整旗鼓</button>
+        <button id="restart-btn" onclick="returnToMenu()">重整旗鼓</button>
     </div>
 
 <script>
@@ -201,7 +219,7 @@ const CHARACTERS = [
         id: 1, name: "書生", type: "輕功型", maxHp: 150, speed: 4.8, maxMp: 100, ultCost: 3, spCost: 10, s1Cost: 20, spCdMax: 150, s1CdMax: 55, 
         spName: "凌波微步", s1Name: "折扇罡風", ultName: "揮毫落紙",
         desc: "輕功卓越。擁有全場最快的移動身法，並且能施展空中戰術，在騰空期間招式會獲得巨大增幅。",
-        detailDesc: "【秘術：凌波微步】\n縱躍騰空並向空中移動（持續0.5秒），期間會在地面留下無敵殘影。如果在騰空狀態下用身體撞球，反彈的球速將大幅暴增為原本的1.6倍！\n\n【武技：折扇罡風】\n向前射出扇形氣流，擊中對手造成30點傷害。★特別注意：若在「凌波微步」的騰越空翻期間施放此武技，罡風飛行速度會從原來的5.5大幅暴增至9.0，達到極速殺敵效果！\n\n【絕技：揮毫落紙】(消耗3點)\n當球位於自身前方半徑220像素內時可發動，文氣爆發使球以8.5的超高速進入隱形「墨跡潛行」狀態，球會在飛行中若隱若現，擾亂敵方防線。"
+        detailDesc: "【秘術：凌波微步】\n縱躍騰空並向空中移動（持續0.5秒），期間會在地面留下無敵殘影。如果在騰空狀態下用身體撞球，反彈的球速將大幅暴增為原本的1.6倍！\n\n【武技：折扇罡風】\n向前射出扇形氣流，擊中對手造成30點傷害。★特別注意：若在「凌波微步」的騰越空翻期間施放此武技，罡風飛行速度會從原來的5.5大幅暴增至9.0，達到極速殺敵效果！\n\n【絕技：揮毫落紙】(消耗3點)\n當球位於自身前方半徑220像素內時可發動，文氣爆發使球進入「水墨大招」狀態。球過中線前完全隱形，過中線後才進入若隱若現的潛行狀態。"
     },
     { 
         id: 2, name: "刀俠", type: "防守型", maxHp: 270, speed: 2.3, maxMp: 100, ultCost: 4, spCost: 15, s1Cost: 25, spCdMax: 240, s1CdMax: 90, 
@@ -219,7 +237,7 @@ const CHARACTERS = [
         id: 4, name: "舞者", type: "幻舞型", maxHp: 160, speed: 3.2, maxMp: 120, ultCost: 4, spCost: 20, s1Cost: 25, spCdMax: 210, s1CdMax: 65, 
         spName: "驚鴻幻影", s1Name: "霓裳羽衣步", ultName: "天鵝鏡花舞",
         desc: "詭譎莫測。精通幻術分身，能從鏡像角度協同作戰，絕技更能使球產生不規則的弧線漂移。",
-        detailDesc: "【秘術：驚鴻幻影】\n在敵方鏡像對稱位置召喚一個持續 4 秒的「同步幻體分身」。分身具備碰撞體積，能協助防守，並會模仿本體的一舉一動。\n\n【武技：霓裳羽衣步】\n向前發射粉紅羽衣舞步氣功（傷害30）。★當分身存在時，分身會同步釋放一發武技氣功。當分身同步釋放武技完畢後，幻影便會立刻功成身退、消散不見。\n\n://【絕技：天鵝鏡花舞】(消耗4點)\n當球位於前方220像素內可施放。為真氣球注入魅惑之舞，使球以6.5的速度向前推進，並啟動「不規則蛇行漂移」狀態，球會沿著不規則的左右弧線扭動，極難防守。"
+        detailDesc: "【秘術：驚鴻幻影】\n在敵方鏡像對稱位置召喚一個持續 4 秒的「同步幻體分身」。分身具備碰撞體積，能協助防守，並會模仿本體的一舉一動。\n\n【武技：霓裳羽衣步】\n向前發射粉紅羽衣舞步氣功（傷害30）。★當分身存在時，分身會同步釋放一發武技氣功。當分身同步釋放武技完畢後，幻影便會立刻功成身退、消散不見。\n\n【絕技：天鵝鏡花舞】(消耗4點)\n當球位於前方220像素內可施放。為真氣球注入魅惑之舞，使球以6.5的速度向前推進，並啟動「不規則蛇行漂移」狀態，球會沿著不規則的左右弧線扭動，極難防守。"
     },
     { 
         id: 5, name: "拳師", type: "反擊型", maxHp: 200, speed: 3.5, maxMp: 100, ultCost: 5, spCost: 15, s1Cost: 20, spCdMax: 160, s1CdMax: 60, 
@@ -263,7 +281,6 @@ let itemSpawnTimer = 120;
 let joystickX = 0; 
 let isDraggingJoystick = false;
 
-// 鍵盤緩衝表與技能單次按壓鎖
 let keysPressed = {};
 let keyboardLock = { z: false, x: false, c: false };
 
@@ -275,6 +292,17 @@ let p2ScoreScale = 1.0;
 const charListDiv = document.getElementById("char-list");
 let selectedCharId = 0;
 
+let lastTime = performance.now();
+let accumulator = 0;
+let speedMultiplier = 1.0; 
+let deltaTime = 1000 / 60; 
+
+function setSpeedMultiplier(mult, btnEl) {
+    speedMultiplier = mult;
+    document.querySelectorAll('.speed-btn').forEach(btn => btn.classList.remove('active'));
+    btnEl.classList.add('active');
+}
+
 function updateDetailPanel(id) {
     const c = CHARACTERS[id];
     document.getElementById("detail-title").innerText = `${c.name} (${c.type})`;
@@ -282,10 +310,17 @@ function updateDetailPanel(id) {
     document.getElementById("detail-desc").innerText = c.desc;
 }
 
+function selectCharacter(id) {
+    document.querySelectorAll(".char-card").forEach(el => el.classList.remove("selected"));
+    const cards = document.querySelectorAll(".char-card");
+    if(cards[id]) cards[id].classList.add("selected");
+    selectedCharId = id;
+    updateDetailPanel(id);
+}
+
 function openModal(type) {
     const titleEl = document.getElementById("modal-title");
     const bodyEl = document.getElementById("modal-body");
-    
     bodyEl.innerHTML = "";
 
     if (type === 'rules') {
@@ -355,12 +390,7 @@ CHARACTERS.forEach((c, idx) => {
     const card = document.createElement("div");
     card.className = `char-card ${idx === 0 ? 'selected' : ''}`;
     card.innerText = c.name;
-    card.onclick = () => {
-        document.querySelectorAll(".char-card").forEach(el => el.classList.remove("selected"));
-        card.classList.add("selected");
-        selectedCharId = idx;
-        updateDetailPanel(idx);
-    };
+    card.onclick = () => { selectCharacter(idx); };
     charListDiv.appendChild(card);
 });
 updateDetailPanel(0);
@@ -400,15 +430,24 @@ function initGame(p1Id) {
         aiTargetX: canvas.width / 2, aiDecisionTimer: 0
     };
 
+    p1Score = 0;
+    p2Score = 0;
+    bullets = [];
+    particles = [];
+    fieldItems = [];
+    daoShield = null;
+
+    deltaTime = (1000 / 60) / speedMultiplier;
+
     setupJoystick();
     setupButtons();
     setupKeyboardAndGamepad(); 
     
-    // 遊戲開始時，立刻強制取得網頁與鍵盤輸入焦點
     canvas.focus();
 
     startCountdown(0); 
     gameActive = true;
+    lastTime = performance.now(); 
     requestAnimationFrame(gameLoop);
 }
 
@@ -483,13 +522,11 @@ function setupButtons() {
 
 let gamepadPreviousButtons = {};
 function setupKeyboardAndGamepad() {
-    // 監聽全域事件，並使用 e.preventDefault() 防止網頁被按鍵捲動或轉移焦點
     window.addEventListener("keydown", (e) => {
         if (!gameActive) return;
-        
         let key = e.key.toLowerCase();
         if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "z", "x", "c"].includes(key)) {
-            e.preventDefault(); // 攔截瀏覽器預設行為
+            e.preventDefault(); 
         }
         keysPressed[e.key] = true;
     });
@@ -497,8 +534,6 @@ function setupKeyboardAndGamepad() {
     window.addEventListener("keyup", (e) => {
         if (!gameActive) return;
         keysPressed[e.key] = false;
-        
-        // 放開按鍵時重置單次釋放鎖
         let key = e.key.toLowerCase();
         if (key === 'z') keyboardLock.z = false;
         if (key === 'x') keyboardLock.x = false;
@@ -506,15 +541,11 @@ function setupKeyboardAndGamepad() {
     });
 }
 
-// 每影格進行輸入精確輪詢與融合
 function checkExternalInputs() {
     let finalMove = 0;
-
-    // 1. 處理實體鍵盤移動
     if (keysPressed["ArrowLeft"]) finalMove = -1.0;
     if (keysPressed["ArrowRight"]) finalMove = 1.0;
 
-    // 2. 處理實體鍵盤釋放招式 (防連打單次觸發機制)
     if ((keysPressed["z"] || keysPressed["Z"])) {
         if (!keyboardLock.z) { useSp(player); keyboardLock.z = true; }
     }
@@ -525,7 +556,6 @@ function checkExternalInputs() {
         if (!keyboardLock.c) { if(player.ult >= player.ultCost) useUlt(player); keyboardLock.c = true; }
     }
 
-    // 3. 處理 HTML5 Gamepad 手把輸入
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     let gp = null;
     for (let i = 0; i < gamepads.length; i++) {
@@ -537,10 +567,9 @@ function checkExternalInputs() {
         if (Math.abs(axisX) > 0.15) { 
             finalMove = axisX;
         }
-
-        let btnSp = gp.buttons[5]?.pressed; // RB
-        let btnS1 = gp.buttons[2]?.pressed; // X
-        let btnUlt = gp.buttons[3]?.pressed; // Y
+        let btnSp = gp.buttons[5]?.pressed; 
+        let btnS1 = gp.buttons[2]?.pressed; 
+        let btnUlt = gp.buttons[3]?.pressed; 
 
         if (btnSp && !gamepadPreviousButtons[5]) useSp(player);
         if (btnS1 && !gamepadPreviousButtons[2]) useS1(player);
@@ -551,7 +580,6 @@ function checkExternalInputs() {
         gamepadPreviousButtons[3] = btnUlt;
     }
 
-    // 4. 輸入融合判定
     if (finalMove !== 0) {
         joystickX = finalMove;
     } else if (!isDraggingJoystick) {
@@ -623,6 +651,7 @@ function checkPaddleHitSp(char) {
         ball.vx = ball.speed * offset * 0.6;
         ball.vy = dir * ball.speed;
         ball.lastHitBy = char;
+        ball.status = "normal";
         ball.specialType = "none"; 
         createParticles(ball.x, ball.y, "#ffd700", 15);
     }
@@ -665,14 +694,17 @@ function useUlt(char) {
     char.transparent = true;
     char.ult -= char.ultCost;
     let dir = char.isP1 ? -1 : 1;
-    
     char.ultVisualTimer = 45; 
 
     if (char.id === 0) { 
         bullets.push({ x: char.x, y: char.y + dir*20, vx: 0, vy: dir * 4.5, r: 32, dmg: 90, color: "#ff8c00", owner: char });
     } else if (char.id === 1) { 
         if (Math.abs(ball.y - char.y) < 220) {
-            ball.speed = 8.5; ball.status = "stealth"; ball.timer = 100; ball.vy = dir * ball.speed; ball.lastHitBy = char;
+            ball.speed = 8.5; 
+            ball.status = "stealth"; 
+            ball.timer = 100; 
+            ball.vy = dir * ball.speed; 
+            ball.lastHitBy = char;
             ball.specialType = "none";
         }
     } else if (char.id === 2) { 
@@ -681,7 +713,11 @@ function useUlt(char) {
         bullets.push({ x: char.x, y: char.y + dir * 20, vx: 0, vy: dir * 14.0, r: 12, dmg: 120, color: "#cc0000", owner: char, isUltThrust: true });
     } else if (char.id === 4) { 
         if (Math.abs(ball.y - char.y) < 220) {
-            ball.speed = 6.5; ball.status = "drift"; ball.timer = 120; ball.vy = dir * ball.speed; ball.lastHitBy = char;
+            ball.speed = 6.5; 
+            ball.status = "drift"; 
+            ball.timer = 120; 
+            ball.vy = dir * ball.speed; 
+            ball.lastHitBy = char;
             ball.specialType = "none";
         }
     } else if (char.id === 5) { 
@@ -691,7 +727,6 @@ function useUlt(char) {
 }
 
 function updateLogic() {
-    // 執行輸入偵測判斷
     checkExternalInputs();
 
     if (countdownTimer > 0) {
@@ -708,7 +743,6 @@ function updateLogic() {
 
     [player, ai].forEach(c => {
         if(c.mp < c.maxMp) c.mp += 0.18;
-        
         if (c.spCd > 0) c.spCd--;
         if (c.s1Cd > 0) c.s1Cd--;
         if (c.ultVisualTimer > 0) c.ultVisualTimer--;
@@ -769,7 +803,7 @@ function updateLogic() {
     ai.x = Math.max(BORDER + aiWidth/2, Math.min(canvas.width - BORDER - aiWidth/2, ai.x));
 
     if (countdownTimer <= 0) {
-        if (ai.ult >= ai.ultCost && Math.random() < 0.015) useUlt(ai);
+        if (ai.transparent && Math.random() < 0.015) useUlt(ai);
         if (ai.s1Cd === 0 && ai.mp >= ai.s1Cost && Math.abs(ball.x - ai.x) < 70 && Math.random() < 0.025) useS1(ai);
         if (ai.spCd === 0 && ai.mp >= ai.spCost && Math.hypot(ball.x - ai.x, ball.y - ai.y) < 60 && Math.random() < 0.12) useSp(ai);
     }
@@ -831,7 +865,9 @@ function updateLogic() {
             ball.speed = retSpd;
             ball.vx = ball.speed * offset * 0.75;
             ball.vy = dir * ball.speed;
-            ball.status = "normal"; ball.specialType = "none"; ball.lastHitBy = paddle;
+            ball.status = "normal"; 
+            ball.specialType = "none"; 
+            ball.lastHitBy = paddle;
             createParticles(ball.x, ball.y, "#ffffff", 6);
             return true;
         }
@@ -862,7 +898,7 @@ function updateLogic() {
         }
 
         if (b.isQinUlt && b.hasHitBall) {
-            // 已碰過球，收斂內勁不再交互
+            // 已碰過球
         } else {
             if (Math.hypot(b.x - ball.x, b.y - ball.y) < b.r + ball.radius) {
                 ball.speed = 5.5; ball.vx = ball.speed * ((ball.x - b.x)/16); ball.vy = b.vy > 0 ? ball.speed : -ball.speed;
@@ -1020,11 +1056,37 @@ function drawGame() {
     });
 
     ball.history.forEach((pos, idx) => {
+        // 書生絕技墨跡大招渲染控制
+        if (ball.status === "stealth") {
+            let midY = canvas.height / 2;
+            let isP1Ball = (ball.vy < 0); 
+            // 如果球還沒過中線，尾跡直接不畫
+            if ((isP1Ball && ball.y > midY) || (!isP1Ball && ball.y < midY)) {
+                return;
+            }
+        }
         ctx.beginPath(); ctx.arc(pos.x, pos.y, ball.radius * (0.4 + idx*0.15), 0, Math.PI * 2);
         ctx.fillStyle = `rgba(244, 237, 210, ${0.1 + idx * 0.15})`; ctx.fill(); ctx.closePath();
     });
 
-    if (!(ball.status === "stealth" && ball.timer % 14 < 6)) {
+    // 書生絕技球體本身隱形控制邏輯
+    let shouldDrawBall = true;
+    if (ball.status === "stealth") {
+        let midY = canvas.height / 2;
+        let isP1Ball = (ball.vy < 0); 
+        
+        if ((isP1Ball && ball.y > midY) || (!isP1Ball && ball.y < midY)) {
+            // 過中線前：完全隱形
+            shouldDrawBall = false;
+        } else {
+            // 過中線後：若隱形現
+            if (ball.timer % 14 < 6) {
+                shouldDrawBall = false;
+            }
+        }
+    }
+
+    if (shouldDrawBall) {
         ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
         if (ball.specialType === "sword_wave") ctx.fillStyle = "#ff3300"; 
         else if (ball.specialType === "drain_essence") ctx.fillStyle = "#32cd32"; 
@@ -1127,15 +1189,22 @@ function drawGame() {
     }
 }
 
-function gameLoop() {
+function gameLoop(currentTime) {
     if (!gameActive) return;
-    
-    // 每幀強制將網頁操作核心鎖定在畫布上，確保 100% 接收鍵盤事件
     if (document.activeElement !== canvas && !isDraggingJoystick) {
         canvas.focus();
     }
 
-    updateLogic();
+    let passedTime = currentTime - lastTime;
+    lastTime = currentTime;
+    if (passedTime > 100) passedTime = 100;
+    accumulator += passedTime;
+
+    while (accumulator >= deltaTime) {
+        updateLogic();
+        accumulator -= deltaTime;
+    }
+
     drawGame();
     requestAnimationFrame(gameLoop);
 }
@@ -1156,6 +1225,24 @@ function endGame(title, desc) {
     document.getElementById("game-over-screen").style.display = "flex";
     document.getElementById("result-title").innerText = title;
     document.getElementById("result-desc").innerText = desc;
+}
+
+// 記憶機制核心：重整旗鼓時返回選單，不刷新網頁，保留上一局玩家設定
+function returnToMenu() {
+    document.getElementById("game-over-screen").style.display = "none";
+    document.getElementById("game-container").style.display = "none";
+    document.getElementById("char-select").style.display = "block";
+    
+    // 依據記憶的值重新激活按鈕選中樣式
+    let currentSpeedBtnId = "speed-btn-slow";
+    if (speedMultiplier === 1.25) currentSpeedBtnId = "speed-btn-med";
+    if (speedMultiplier === 1.5) currentSpeedBtnId = "speed-btn-fast";
+    
+    document.querySelectorAll('.speed-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(currentSpeedBtnId).classList.add('active');
+    
+    // 重新高亮玩家原本選的角色
+    selectCharacter(selectedCharId);
 }
 </script>
 </body>
