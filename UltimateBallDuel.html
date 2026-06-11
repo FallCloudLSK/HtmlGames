@@ -15,7 +15,7 @@
             padding: 5px;
             background-color: #1a1612; 
             color: #f4edd2; 
-            font-family: "PingFang TC", \"Microsoft JhengHei\", sans-serif;
+            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -35,7 +35,7 @@
         #detail-desc { font-size: 12px; color: #e0d0b0; line-height: 1.4; }
         #start-btn { width: 100%; padding: 12px; background: #8b0000; color: #fff; border: 1px solid #ff4500; font-weight: bold; font-size: 18px; border-radius: 5px; cursor: pointer; text-shadow: 1px 1px 2px #000; margin-bottom: 12px; }
 
-        /* 選單說明按鈕區域：改為 2x2 網格容納四個按鈕 */
+        /* 選單說明按鈕區域 */
         .info-btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
         .info-btn { background: #4a3b2c; color: #f4edd2; border: 1px solid #8b6508; padding: 8px 4px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; }
         .info-btn:hover { background: #5c4a37; }
@@ -47,6 +47,9 @@
         .modal-body { font-size: 13px; color: #e0d0b0; line-height: 1.5; white-space: pre-wrap; text-align: left; }
         .modal-close { display: block; width: 100%; margin-top: 15px; padding: 8px; background: #5c4033; color: #ffd700; border: 1px solid #8b6508; border-radius: 4px; font-weight: bold; cursor: pointer; text-align: center; }
         
+        /* 說明區塊副標題 */
+        .control-section-title { font-weight: bold; color: #ffd700; margin-top: 10px; margin-bottom: 3px; border-left: 3px solid #ff4500; padding-left: 6px; font-size: 14px; }
+
         /* 頓悟說明的圖解樣式 */
         .buff-demo-row { display: flex; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #3c3024; padding-bottom: 8px; }
         .buff-demo-tag { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: #000; border-radius: 3px; margin-right: 12px; flex-shrink: 0; }
@@ -65,7 +68,7 @@
             max-width: 420px;
             margin-top: 5px;
         }
-        canvas { background: #0f0c08; border: 16px solid #5c4033; border-radius: 12px; display: block; width: 100%; }
+        canvas { background: #0f0c08; border: 16px solid #5c4033; border-radius: 12px; display: block; width: 100%; outline: none; }
         
         /* 右下角懸浮絕技按鈕 */
         #ult-btn-wrapper { 
@@ -148,7 +151,6 @@
         </div>
 
         <button id="start-btn">落子入局</button>
-        
         <div id="author-tag">2026 by FallCloud & Gemini</div>
     </div>
 
@@ -162,7 +164,7 @@
 
     <div id="game-container">
         <div class="stage-wrapper">
-            <canvas id="gameCanvas" width="400" height="650"></canvas>
+            <canvas id="gameCanvas" width="400" height="650" tabindex="1"></canvas>
             
             <div id="ult-btn-wrapper">
                 <div id="ult-circle-btn" class="ult-circle-status">絕技<br><span id="ult-circle-text">0/0</span></div>
@@ -188,7 +190,6 @@
     </div>
 
 <script>
-// 修正點1：所有人初始最大體力 (maxHp) 全部提高 30 點
 const CHARACTERS = [
     { 
         id: 0, name: "劍客", type: "平衡型", maxHp: 180, speed: 3.5, maxMp: 100, ultCost: 3, spCost: 15, s1Cost: 20, spCdMax: 180, s1CdMax: 60, 
@@ -218,17 +219,16 @@ const CHARACTERS = [
         id: 4, name: "舞者", type: "幻舞型", maxHp: 160, speed: 3.2, maxMp: 120, ultCost: 4, spCost: 20, s1Cost: 25, spCdMax: 210, s1CdMax: 65, 
         spName: "驚鴻幻影", s1Name: "霓裳羽衣步", ultName: "天鵝鏡花舞",
         desc: "詭譎莫測。精通幻術分身，能從鏡像角度協同作戰，絕技更能使球產生不規則的弧線漂移。",
-        detailDesc: "【秘術：驚鴻幻影】\n在敵方鏡像對稱位置召喚一個持續 4 秒的「同步幻體分身」。分身具備碰撞體積，能協助防守，並會模仿本體的一舉一動。\n\n【武技：霓裳羽衣步】\n向前發射粉紅羽衣舞步氣功（傷害30）。★當分身存在時，分身會同步釋放一發武技氣功。當分身同步釋放武技完畢後，幻影便會立刻功成身退、消散不見。\n\n【絕技：天鵝鏡花舞】(消耗4點)\n當球位於前方220像素內可施放。為真氣球注入魅惑之舞，使球以6.5的速度向前推進，並啟動「不規則蛇行漂移」狀態，球會沿著不規則的左右弧線扭動，極難防守。"
+        detailDesc: "【秘術：驚鴻幻影】\n在敵方鏡像對稱位置召喚一個持續 4 秒的「同步幻體分身」。分身具備碰撞體積，能協助防守，並會模仿本體的一舉一動。\n\n【武技：霓裳羽衣步】\n向前發射粉紅羽衣舞步氣功（傷害30）。★當分身存在時，分身會同步釋放一發武技氣功。當分身同步釋放武技完畢後，幻影便會立刻功成身退、消散不見。\n\n://【絕技：天鵝鏡花舞】(消耗4點)\n當球位於前方220像素內可施放。為真氣球注入魅惑之舞，使球以6.5的速度向前推進，並啟動「不規則蛇行漂移」狀態，球會沿著不規則的左右弧線扭動，極難防守。"
     },
     { 
         id: 5, name: "拳師", type: "反擊型", maxHp: 200, speed: 3.5, maxMp: 100, ultCost: 5, spCost: 15, s1Cost: 20, spCdMax: 160, s1CdMax: 60, 
         spName: "借力打力", s1Name: "撼天百烈拳", ultName: "北斗傲蒼穹",
         desc: "剛猛霸氣。擅長防守反擊與摧毀敵方內力。其終極大招破壞力極強，具備越撞越大的霸道特性。",
-        detailDesc: "【秘術：借力打力】\n架起太極反彈雙掌，期間完全免疫一切對手招式傷害。此時若有敵方氣功砸中你，你非但不扣血，還能將其化為自己的真氣（MP+35）與絕技點數（奧義+1）。\n\n【武技：撼天百烈拳】\n向前打出一記百烈拳風，砸中對手造成40點高額伤害。若擊中真氣球，球將附帶「蝕氣」狀態，此時對手如果用身體接球，全身上下的真氣將瞬間被蒸發 50 點！\n\n【絕技：北斗傲蒼穹】(消耗5點)\n轟出一發半徑24的北斗粉紅氣勁大招，重創路徑上的對手(造成110點傷害)。★最霸道的是：當此大招碰到球後不但不會消失，反而還會擴大一圈（半徑再加大），繼續推球向前轟殺！"
+        detailDesc: "【秘術：借力打力】\n架起太極反彈雙掌，期間完全免疫一切對手招式傷害。此時若有敵方氣功砸中你，你非但不扣血，還能將其化為自己的真氣（MP+35）與絕技點數（奧義+1）。\n\n【武技：撼天百烈拳】\n向前打出一記百烈拳風，砸中對手造成40點高額傷害。若擊中真氣球，球將附帶「蝕氣」狀態，此時對手如果用身體接球，全身上下的真氣將瞬間被蒸發 50 點！\n\n【絕技：北斗傲蒼穹】(消耗5點)\n轟出一發半徑24的北斗粉紅氣勁大招，重創路徑上的對手(造成110點傷害)。★最霸道的是：當此大招碰到球後，會使大招氣勁本身擴大一圈（半徑加大），同時強烈反彈真氣球。注意：此招對球的碰撞判定僅有一次，生效後便不會再次碰觸該球。"
     }
 ];
 
-// 頓悟點種類與圖解對應陣列
 const ITEM_TYPES = [
     { type: 'ult', color: '#ff4500', label: '絕', desc: '<b>【修為】奧義能量點 +1</b><br>直接獲得 1 點珍貴的絕技奧義能量，加速大招解鎖。' },
     { type: 'mp', color: '#1e90ff', label: '氣', desc: '<b>【補氣】真氣值 +40</b><br>瞬間回復 40 點身法真氣，可更多次釋放門派秘術與武技。' },
@@ -263,6 +263,10 @@ let itemSpawnTimer = 120;
 let joystickX = 0; 
 let isDraggingJoystick = false;
 
+// 鍵盤緩衝表與技能單次按壓鎖
+let keysPressed = {};
+let keyboardLock = { z: false, x: false, c: false };
+
 let countdownTimer = 180; 
 let countdownText = "3";
 let p1ScoreScale = 1.0;   
@@ -278,20 +282,37 @@ function updateDetailPanel(id) {
     document.getElementById("detail-desc").innerText = c.desc;
 }
 
-// 修正點2：選單彈窗增加頓悟說明，並以 HTML 仿 Canvas 樣式繪製 Buff 標籤
 function openModal(type) {
     const titleEl = document.getElementById("modal-title");
     const bodyEl = document.getElementById("modal-body");
     
-    // 清空舊內容
     bodyEl.innerHTML = "";
 
     if (type === 'rules') {
         titleEl.innerText = "武林規矩 (規則說明)";
         bodyEl.innerText = "【基本玩法】\n這是一場結合武功與球技的生死決鬥。雙方各據一方，主要目標是利用身體或武學技能將「真氣球」反彈至對手的底線外。\n\n【勝負判定】\n1. 得分致勝：率先將球送入對手底線奪得 5 分者，即可獲勝。\n2. 擊殺致勝：戰鬥中施放的武技與絕技能對敵方造成直接「內傷傷害」，若成功將對方的體力（HP）扣減至 0，則直接獲得最終勝利！";
     } else if (type === 'controls') {
-        titleEl.innerText = "招式指引 (操控說明)";
-        bodyEl.innerText = "【身法移動】\n滑動左下角的「操控搖桿」，即可控制俠客左右橫移閃切，搶佔擊球角度。\n\n【秘術 (左按鈕)】\n消耗少量真氣施放。各門派秘術自成一格（如瞬移、無敵、架盾或召喚分身），能協助你在千鈞一髮之際死裡逃生。\n\n【武技 (right按鈕)】\n消耗真氣釋放遠程氣功。氣功擊中真氣球時會為球附加「特殊破壞效果」；直接砸中對手則會造成內傷。\n\n【絕技 (右下懸浮大鈕)】\n當角色累積足夠的「奧義能量點（●）」時即可觸發。發動移山倒海的門派終極大招，一擊扭轉乾坤！";
+        titleEl.innerText = "全平台操作說明";
+        
+        let cMobile = document.createElement("div");
+        cMobile.className = "control-section-title"; cMobile.innerText = "【手機/觸控 操控】";
+        let dMobile = document.createElement("div");
+        dMobile.innerText = "● 移動身法：滑動左下角「虛擬搖桿」控制左右位移。\n● 釋放招式：點擊右側「秘術」、「武技」按鈕，或右下角懸浮的「絕技」圓鈕。";
+        
+        let cKeyboard = document.createElement("div");
+        cKeyboard.className = "control-section-title"; cKeyboard.innerText = "【電腦/鍵盤 操控】";
+        let dKeyboard = document.createElement("div");
+        dKeyboard.innerText = "● 移動身法：按鍵盤 ⬅️ / ➡️ 方向鍵 控制左右移動。\n● 門派秘術：按 【 Z 】 鍵\n● 武學武技：按 【 X 】 鍵\n● 終極絕技：按 【 C 】 鍵";
+
+        let cGamepad = document.createElement("div");
+        cGamepad.className = "control-section-title"; cGamepad.innerText = "【手把控制器 操控】(以 XBOX 為例)";
+        let dGamepad = document.createElement("div");
+        dGamepad.innerText = "● 移動身法：撥動 「左類比搖桿」(蘑菇頭) 控制左右。\n● 門派秘術：按 【 RB 】 鍵 (右肩鈕)\n● 武學武技：按 【 X 】 鍵 (左側動作鈕)\n● 終極絕技：按 【 Y 】 鍵 (上方動作鈕)";
+
+        bodyEl.appendChild(cMobile); bodyEl.appendChild(dMobile);
+        bodyEl.appendChild(cKeyboard); bodyEl.appendChild(dKeyboard);
+        bodyEl.appendChild(cGamepad); bodyEl.appendChild(dGamepad);
+
     } else if (type === 'chars') {
         const c = CHARACTERS[selectedCharId];
         titleEl.innerText = `俠客【${c.name}】招式全拆解`;
@@ -305,7 +326,6 @@ function openModal(type) {
         introText.innerText = "在對決期間，戰場中央會隨機凝聚「天地頓悟點」。凡是以「真氣球撞擊」或運用「武技氣功擊中」該頓悟點的俠客，均可隔空吸納其內化真意，獲得對應的限時武學效果增幅：";
         bodyEl.appendChild(introText);
 
-        // 依照程式碼中 ITEM_TYPES 繪製出每個 buff 的外觀與效果說明
         ITEM_TYPES.forEach(item => {
             let row = document.createElement("div");
             row.className = "buff-demo-row";
@@ -382,6 +402,11 @@ function initGame(p1Id) {
 
     setupJoystick();
     setupButtons();
+    setupKeyboardAndGamepad(); 
+    
+    // 遊戲開始時，立刻強制取得網頁與鍵盤輸入焦點
+    canvas.focus();
+
     startCountdown(0); 
     gameActive = true;
     requestAnimationFrame(gameLoop);
@@ -448,12 +473,90 @@ function setupJoystick() {
 function setupButtons() {
     const bind = (id, action) => {
         const el = document.getElementById(id);
-        el.onclick = (e) => { e.preventDefault(); action(); };
-        el.addEventListener("touchstart", (e) => { e.preventDefault(); action(); }, {passive: false});
+        el.onclick = (e) => { e.preventDefault(); action(); canvas.focus(); };
+        el.addEventListener("touchstart", (e) => { e.preventDefault(); action(); canvas.focus(); }, {passive: false});
     };
     bind("btn-sp", () => useSp(player));
     bind("btn-s1", () => useS1(player));
     bind("ult-circle-btn", () => { if(player.ult >= player.ultCost) useUlt(player); });
+}
+
+let gamepadPreviousButtons = {};
+function setupKeyboardAndGamepad() {
+    // 監聽全域事件，並使用 e.preventDefault() 防止網頁被按鍵捲動或轉移焦點
+    window.addEventListener("keydown", (e) => {
+        if (!gameActive) return;
+        
+        let key = e.key.toLowerCase();
+        if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "z", "x", "c"].includes(key)) {
+            e.preventDefault(); // 攔截瀏覽器預設行為
+        }
+        keysPressed[e.key] = true;
+    });
+
+    window.addEventListener("keyup", (e) => {
+        if (!gameActive) return;
+        keysPressed[e.key] = false;
+        
+        // 放開按鍵時重置單次釋放鎖
+        let key = e.key.toLowerCase();
+        if (key === 'z') keyboardLock.z = false;
+        if (key === 'x') keyboardLock.x = false;
+        if (key === 'c') keyboardLock.c = false;
+    });
+}
+
+// 每影格進行輸入精確輪詢與融合
+function checkExternalInputs() {
+    let finalMove = 0;
+
+    // 1. 處理實體鍵盤移動
+    if (keysPressed["ArrowLeft"]) finalMove = -1.0;
+    if (keysPressed["ArrowRight"]) finalMove = 1.0;
+
+    // 2. 處理實體鍵盤釋放招式 (防連打單次觸發機制)
+    if ((keysPressed["z"] || keysPressed["Z"])) {
+        if (!keyboardLock.z) { useSp(player); keyboardLock.z = true; }
+    }
+    if ((keysPressed["x"] || keysPressed["X"])) {
+        if (!keyboardLock.x) { useS1(player); keyboardLock.x = true; }
+    }
+    if ((keysPressed["c"] || keysPressed["C"])) {
+        if (!keyboardLock.c) { if(player.ult >= player.ultCost) useUlt(player); keyboardLock.c = true; }
+    }
+
+    // 3. 處理 HTML5 Gamepad 手把輸入
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let gp = null;
+    for (let i = 0; i < gamepads.length; i++) {
+        if (gamepads[i]) { gp = gamepads[i]; break; }
+    }
+
+    if (gp) {
+        let axisX = gp.axes[0];
+        if (Math.abs(axisX) > 0.15) { 
+            finalMove = axisX;
+        }
+
+        let btnSp = gp.buttons[5]?.pressed; // RB
+        let btnS1 = gp.buttons[2]?.pressed; // X
+        let btnUlt = gp.buttons[3]?.pressed; // Y
+
+        if (btnSp && !gamepadPreviousButtons[5]) useSp(player);
+        if (btnS1 && !gamepadPreviousButtons[2]) useS1(player);
+        if (btnUlt && !gamepadPreviousButtons[3]) { if(player.ult >= player.ultCost) useUlt(player); }
+
+        gamepadPreviousButtons[5] = btnSp;
+        gamepadPreviousButtons[2] = btnS1;
+        gamepadPreviousButtons[3] = btnUlt;
+    }
+
+    // 4. 輸入融合判定
+    if (finalMove !== 0) {
+        joystickX = finalMove;
+    } else if (!isDraggingJoystick) {
+        joystickX = 0;
+    }
 }
 
 function applyBuff(char, type) {
@@ -582,12 +685,15 @@ function useUlt(char) {
             ball.specialType = "none";
         }
     } else if (char.id === 5) { 
-        bullets.push({ x: char.x, y: char.y + dir*20, vx: 0, vy: dir * 6.0, r: 24, dmg: 110, color: "#ff1493", owner: char, isQinUlt: true });
+        bullets.push({ x: char.x, y: char.y + dir*20, vx: 0, vy: dir * 6.0, r: 24, dmg: 110, color: "#ff1493", owner: char, isQinUlt: true, hasHitBall: false });
     }
     createParticles(char.x, char.y + char.jumpY, "#ff4500", 25);
 }
 
 function updateLogic() {
+    // 執行輸入偵測判斷
+    checkExternalInputs();
+
     if (countdownTimer > 0) {
         countdownTimer--;
         if (countdownTimer >= 120) countdownText = "3";
@@ -639,7 +745,6 @@ function updateLogic() {
         if (daoShield.timer <= 0 || daoShield.hits <= 0) { daoShield = null; }
     }
 
-    // 頓悟點凝聚機制
     itemSpawnTimer--;
     if (itemSpawnTimer <= 0 && fieldItems.length < 3) {
         let it = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
@@ -756,22 +861,27 @@ function updateLogic() {
             continue;
         }
 
-        if (Math.hypot(b.x - ball.x, b.y - ball.y) < b.r + ball.radius) {
-            ball.speed = 5.5; ball.vx = ball.speed * ((ball.x - b.x)/16); ball.vy = b.vy > 0 ? ball.speed : -ball.speed;
-            ball.lastHitBy = b.owner;
-            if (b.isS1) {
-                if (b.owner.id === 0) ball.specialType = "sword_wave";    
-                if (b.owner.id === 4) ball.specialType = "dancer_wave";   
-                if (b.owner.id === 5) ball.specialType = "drain_essence"; 
-            }
-            createParticles(ball.x, ball.y, b.color, 12);
-            
-            if (b.isQinUlt) {
-                b.r += 12; 
-                createParticles(b.x, b.y, "#ff69b4", 8);
-            } else {
-                bullets.splice(i, 1); 
-                continue;
+        if (b.isQinUlt && b.hasHitBall) {
+            // 已碰過球，收斂內勁不再交互
+        } else {
+            if (Math.hypot(b.x - ball.x, b.y - ball.y) < b.r + ball.radius) {
+                ball.speed = 5.5; ball.vx = ball.speed * ((ball.x - b.x)/16); ball.vy = b.vy > 0 ? ball.speed : -ball.speed;
+                ball.lastHitBy = b.owner;
+                if (b.isS1) {
+                    if (b.owner.id === 0) ball.specialType = "sword_wave";    
+                    if (b.owner.id === 4) ball.specialType = "dancer_wave";   
+                    if (b.owner.id === 5) ball.specialType = "drain_essence"; 
+                }
+                createParticles(ball.x, ball.y, b.color, 12);
+                
+                if (b.isQinUlt) {
+                    b.r += 14; 
+                    b.hasHitBall = true; 
+                    createParticles(b.x, b.y, "#ff69b4", 8);
+                } else {
+                    bullets.splice(i, 1); 
+                    continue;
+                }
             }
         }
 
@@ -789,7 +899,6 @@ function updateLogic() {
         if (b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
     }
 
-    // 檢測是否觸發天地頓悟點
     for (let i = fieldItems.length - 1; i >= 0; i--) {
         let it = fieldItems[i]; let luckyGuy = null;
         if (Math.abs(ball.x - it.x) < it.w/2 + ball.radius && Math.abs(ball.y - it.y) < it.h/2 + ball.radius) {
@@ -862,7 +971,6 @@ function drawGame() {
         ctx.stroke(); ctx.shadowBlur = 0; 
     }
 
-    // 渲染戰場上的頓悟點（保持方塊化標籤樣式）
     fieldItems.forEach(it => {
         ctx.fillStyle = it.color; ctx.fillRect(it.x - it.w/2, it.y - it.h/2, it.w, it.h);
         ctx.fillStyle = "#000"; ctx.font = "bold 11px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -930,7 +1038,6 @@ function drawGame() {
     });
     ctx.globalAlpha = 1.0;
 
-    // HUD 繪製
     ctx.font = "bold 11px monospace"; ctx.textBaseline = "middle";
     let aiBarW = 100;
     let aiCenterY = BORDER / 2;
@@ -945,7 +1052,6 @@ function drawGame() {
     let aiDots = "●".repeat(aiUltCount) + "○".repeat(5 - aiUltCount);
     ctx.fillText(aiDots, canvas.width / 2 - 35, aiCenterY);
     
-    // 渲染吸納頓悟後的狀態標籤
     let currentStartX = canvas.width / 2 + 35;
     ctx.font = "bold 10px Arial";
     ctx.textAlign = "center";
@@ -964,7 +1070,6 @@ function drawGame() {
         ctx.fillStyle = "#000"; ctx.fillText(`速${Math.ceil(ai.buffs.spd/60)}`, currentStartX + 13, aiCenterY);
     }
 
-    // 玩家 HUD
     ctx.font = "bold 11px monospace";
     let pCenterY = canvas.height - (BORDER / 2);
     ctx.fillStyle = "#443322"; ctx.fillRect(BORDER + 5, pCenterY - 5, aiBarW, 4);
@@ -1024,6 +1129,12 @@ function drawGame() {
 
 function gameLoop() {
     if (!gameActive) return;
+    
+    // 每幀強制將網頁操作核心鎖定在畫布上，確保 100% 接收鍵盤事件
+    if (document.activeElement !== canvas && !isDraggingJoystick) {
+        canvas.focus();
+    }
+
     updateLogic();
     drawGame();
     requestAnimationFrame(gameLoop);
