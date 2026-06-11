@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>華山論球 - 宗師武德策略版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 5px;
+            background-color: #1a1612; 
+            color: #f4edd2; 
+            font-family: "PingFang TC", \"Microsoft JhengHei\", sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto; 
+            padding-bottom: calc(25px + env(safe-area-inset-bottom));
+        }
+        body.game-running { overflow: hidden; }
+        
+        /* 俠客選擇介面 */
+        #char-select { width: 100%; max-width: 420px; background: #2c221a; padding: 12px; border-radius: 10px; border: 2px solid #b8860b; margin-top: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.5); position: relative; }
+        #char-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .char-card { background: #3c3024; padding: 10px 5px; border-radius: 6px; cursor: pointer; text-align: center; border: 2px solid transparent; font-weight: bold; font-size: 14px; color: #d2b48c; }
+        .char-card.selected { border-color: #ffd700; background: #5c4033; color: #ff9900; box-shadow: inset 0 0 8px rgba(255,215,0,0.3); }
+        #detail-panel { background: #1c140e; border: 1px solid #5c4033; border-radius: 6px; padding: 8px; min-height: 110px; margin-bottom: 10px; }
+        #detail-title { font-weight: bold; color: #ffd700; margin-bottom: 2px; font-size: 14px; }
+        #detail-stats { font-size: 11px; color: #87cefa; margin-bottom: 4px; }
+        #detail-desc { font-size: 12px; color: #e0d0b0; line-height: 1.4; }
+        #start-btn { width: 100%; padding: 12px; background: #8b0000; color: #fff; border: 1px solid #ff4500; font-weight: bold; font-size: 18px; border-radius: 5px; cursor: pointer; text-shadow: 1px 1px 2px #000; margin-bottom: 12px; }
+
+        /* 選單說明按鈕區域：改為 2x2 網格容納四個按鈕 */
+        .info-btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+        .info-btn { background: #4a3b2c; color: #f4edd2; border: 1px solid #8b6508; padding: 8px 4px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; }
+        .info-btn:hover { background: #5c4a37; }
+        
+        /* 說明彈窗樣式 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 100; justify-content: center; align-items: center; padding: 20px; }
+        .modal-content { background: #2c221a; border: 2px solid #ffd700; border-radius: 8px; width: 100%; max-width: 380px; padding: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.6); position: relative; max-height: 85vh; overflow-y: auto; }
+        .modal-header { font-size: 16px; font-weight: bold; color: #ffd700; border-bottom: 1px solid #5c4033; padding-bottom: 6px; margin-bottom: 10px; text-align: center; }
+        .modal-body { font-size: 13px; color: #e0d0b0; line-height: 1.5; white-space: pre-wrap; text-align: left; }
+        .modal-close { display: block; width: 100%; margin-top: 15px; padding: 8px; background: #5c4033; color: #ffd700; border: 1px solid #8b6508; border-radius: 4px; font-weight: bold; cursor: pointer; text-align: center; }
+        
+        /* 頓悟說明的圖解樣式 */
+        .buff-demo-row { display: flex; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #3c3024; padding-bottom: 8px; }
+        .buff-demo-tag { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: #000; border-radius: 3px; margin-right: 12px; flex-shrink: 0; }
+        .buff-demo-text { font-size: 12px; color: #ba9a7a; }
+        .buff-demo-text b { color: #f4edd2; font-size: 13px; }
+
+        /* 作者標籤 */
+        #author-tag { text-align: center; font-size: 11px; color: #705b45; margin-top: 10px; font-family: monospace; }
+
+        /* 遊戲主介面 */
+        #game-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 420px; }
+        
+        .stage-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 420px;
+            margin-top: 5px;
+        }
+        canvas { background: #0f0c08; border: 16px solid #5c4033; border-radius: 12px; display: block; width: 100%; }
+        
+        /* 右下角懸浮絕技按鈕 */
+        #ult-btn-wrapper { 
+            position: absolute; 
+            right: 24px; 
+            bottom: 24px; 
+            width: 60px; 
+            height: 60px; 
+            z-index: 5; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        .ult-circle-status { 
+            width: 58px; 
+            height: 58px; 
+            background: rgba(20,15,10,0.75); 
+            border: 2px dashed rgba(218,112,214,0.6); 
+            color: rgba(218,112,214,0.9); 
+            border-radius: 50%; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 12px; 
+            font-weight: bold; 
+            text-align: center; 
+            pointer-events: none; 
+            transition: 0.2s;
+        }
+        .ult-circle-status.ready { 
+            background: rgba(139, 0, 0, 0.95); 
+            border: 2px solid #ff4500; 
+            color: #fff; 
+            box-shadow: 0 0 15px #ff4500; 
+            cursor: pointer; 
+            pointer-events: auto; 
+        }
+
+        /* 區塊操控介面 */
+        .controls-layout { 
+            width: 100%; 
+            margin-top: 8px; 
+            display: grid; 
+            grid-template-columns: 140px 1fr; 
+            gap: 10px; 
+            height: 115px; 
+        }
+        .joystick-zone { background: #221a14; border: 2px dashed #5c4033; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+        #joystick-base { width: 85px; height: 85px; background: rgba(255,255,255,0.03); border: 3px solid #7c5d43; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; }
+        #joystick-stick { width: 38px; height: 38px; background: #c0c0c0; border-radius: 50%; position: absolute; box-shadow: 0 2px 5px #000; }
+        
+        .action-zone { display: grid; }
+        .skills-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; height: 100%; }
+        .btn { background: #3c3024; color: #f4edd2; border: 2px solid #5c4033; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px; cursor: pointer; }
+        .btn span { font-size: 10px; color: #a08060; margin-top: 2px; }
+        .btn.disabled { opacity: 0.4; cursor: not-allowed; }
+        
+        #game-over-screen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,10,5,0.95); flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
+        #result-title { font-size: 36px; color: #ffd700; margin-bottom: 20px; font-weight: bold; }
+        #restart-btn { padding: 10px 30px; font-size: 18px; background: #8b0000; color: #fff; border: 1px solid #ff4500; border-radius: 5px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="char-select">
+        <h3 style="text-align:center; margin: 0 0 8px 0; color: #ffd700;">華山論球 - 選擇你的俠客</h3>
+        <div id="char-list"></div>
+        <div id="detail-panel">
+            <div id="detail-title">-</div>
+            <div id="detail-stats">-</div>
+            <div id="detail-desc">-</div>
+        </div>
+        
+        <div class="info-btn-group">
+            <button class="info-btn" onclick="openModal('rules')">規則說明</button>
+            <button class="info-btn" onclick="openModal('controls')">操控說明</button>
+            <button class="info-btn" onclick="openModal('chars')">角色說明</button>
+            <button class="info-btn" onclick="openModal('enlighten')" style="color: #ffd700; border-color: #ffd700;">頓悟說明</button>
+        </div>
+
+        <button id="start-btn">落子入局</button>
+        
+        <div id="author-tag">2026 by FallCloud & Gemini</div>
+    </div>
+
+    <div id="info-modal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div id="modal-title" class="modal-header">說明</div>
+            <div id="modal-body" class="modal-body">內容</div>
+            <button class="modal-close" onclick="document.getElementById('info-modal').style.display='none'">領悟關閉</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div class="stage-wrapper">
+            <canvas id="gameCanvas" width="400" height="650"></canvas>
+            
+            <div id="ult-btn-wrapper">
+                <div id="ult-circle-btn" class="ult-circle-status">絕技<br><span id="ult-circle-text">0/0</span></div>
+            </div>
+        </div>
+
+        <div class="controls-layout">
+            <div class="joystick-zone" id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
+            
+            <div class="action-zone">
+                <div class="skills-row">
+                    <div class="btn" id="btn-sp"><b id="txt-sp">秘術</b><span>真氣消耗</span></div>
+                    <div class="btn" id="btn-s1"><b id="txt-s1">武技</b><span>真氣消耗</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-screen">
+        <div id="result-title">-</div>
+        <p id="result-desc" style="color:#ba9a7a;"></p>
+        <button id="restart-btn" onclick="location.reload()">重整旗鼓</button>
+    </div>
+
+<script>
+// 修正點1：所有人初始最大體力 (maxHp) 全部提高 30 點
+const CHARACTERS = [
+    { 
+        id: 0, name: "劍客", type: "平衡型", maxHp: 180, speed: 3.5, maxMp: 100, ultCost: 3, spCost: 15, s1Cost: 20, spCdMax: 180, s1CdMax: 60, 
+        spName: "御劍凌空", s1Name: "烈炎劍氣", ultName: "萬劍歸宗",
+        desc: "精通劍道。秘術提供敏捷的位移，其招式能使真氣球產生破壞性的劍氣附著。",
+        detailDesc: "【秘術：御劍凌空】\n朝搖桿方向進行短距離衝刺(瞬間平移65像素)，可用於快速補位或切入射擊角度，若衝刺時撞擊球，會以6.0的基礎速度將球強力反彈。\n\n【武技：烈炎劍氣】\n向前發射一道火紅劍氣，擊中對手造成30點內傷。若擊中球，球會被注入「烈炎劍氣附著」狀態。此時若對手用肉身接球，將直接承受30點內傷傷害！\n\n【絕技：萬劍歸宗】(消耗3點)\n向前釋放一顆巨型旋轉劍氣巨球（半徑32）。當它緩慢向前推進時，擊中球能將球以5.5的速度暴烈擊飛；直接砸中對手則會造成高達90點的致命重創。"
+    },
+    { 
+        id: 1, name: "書生", type: "輕功型", maxHp: 150, speed: 4.8, maxMp: 100, ultCost: 3, spCost: 10, s1Cost: 20, spCdMax: 150, s1CdMax: 55, 
+        spName: "凌波微步", s1Name: "折扇罡風", ultName: "揮毫落紙",
+        desc: "輕功卓越。擁有全場最快的移動身法，並且能施展空中戰術，在騰空期間招式會獲得巨大增幅。",
+        detailDesc: "【秘術：凌波微步】\n縱躍騰空並向空中移動（持續0.5秒），期間會在地面留下無敵殘影。如果在騰空狀態下用身體撞球，反彈的球速將大幅暴增為原本的1.6倍！\n\n【武技：折扇罡風】\n向前射出扇形氣流，擊中對手造成30點傷害。★特別注意：若在「凌波微步」的騰越空翻期間施放此武技，罡風飛行速度會從原來的5.5大幅暴增至9.0，達到極速殺敵效果！\n\n【絕技：揮毫落紙】(消耗3點)\n當球位於自身前方半徑220像素內時可發動，文氣爆發使球以8.5的超高速進入隱形「墨跡潛行」狀態，球會在飛行中若隱若現，擾亂敵方防線。"
+    },
+    { 
+        id: 2, name: "刀俠", type: "防守型", maxHp: 270, speed: 2.3, maxMp: 100, ultCost: 4, spCost: 15, s1Cost: 25, spCdMax: 240, s1CdMax: 90, 
+        spName: "金鐘罩體", s1Name: "重力碎地斬", ultName: "斷空萬里牆",
+        desc: "穩如泰山。擁有極高氣血與防守絕學，擅長製造地形障礙封鎖敵方的任何進攻。",
+        detailDesc: "【秘術：金鐘罩體】\n身形暴漲為2.0倍巨大化，大幅提升防守判定面積。若在金鐘罩期間觸碰到球，能穩固地將球以6.0的平穩射速反彈回去。\n\n【武技：重力碎地斬】\n劈出一道半徑達15像素的大型碎地重刀氣，造成30點內傷。因為刀氣極重，撞擊真氣球時會強制將球反彈，具有極佳的攔截效果。\n\n【絕技：斷空萬里牆】(消耗4點)\n在中線架起一面金黃色的斷空防護氣牆（寬度為場地的60%），持續18秒。該牆能自動封鎖並反彈一切敵方的氣功與真氣球（最多抵擋3次）。★若任何一方得分，氣牆便會提前消失。"
+    },
+    { 
+        id: 3, name: "死士", type: "爆發型", maxHp: 170, speed: 3.8, maxMp: 100, ultCost: 4, spCost: 15, s1Cost: 25, spCdMax: 120, s1CdMax: 36, 
+        spName: "絕命瞬殺", s1Name: "暗影迴旋鏢", ultName: "影殺瞬獄刺",
+        desc: "極致輸出。招式冷卻時間全場最短，擅長以快節奏、縮小身形與致命的直線突刺打亂敵方步調。",
+        detailDesc: "【秘術：絕命瞬殺】\n身形縮小為0.6倍以躲避敵方刀氣，同時進入影殺增幅狀態。若在此狀態下以肉身精準撞擊球，球將被注入極強的爆發力，以高達原先2.3倍的驚人超高速反彈！\n\n【武技：暗影迴旋鏢】\n冷卻時間僅有極短的 0.6 秒！死士能瘋狂投擲迴旋鏢，擊中對手造成30點傷害。與真氣球碰撞時，亦能迅速將球彈回。\n\n【絕技：影殺瞬獄刺】(消耗4點)\n化為一道貫穿全場的血光進行直線突刺（射速高達14.0）。此絕技無法被刀俠氣牆阻擋，若直接刺中敵方俠客，將直接造成全場最高、高達 120 點的毀滅性傷害。"
+    },
+    { 
+        id: 4, name: "舞者", type: "幻舞型", maxHp: 160, speed: 3.2, maxMp: 120, ultCost: 4, spCost: 20, s1Cost: 25, spCdMax: 210, s1CdMax: 65, 
+        spName: "驚鴻幻影", s1Name: "霓裳羽衣步", ultName: "天鵝鏡花舞",
+        desc: "詭譎莫測。精通幻術分身，能從鏡像角度協同作戰，絕技更能使球產生不規則的弧線漂移。",
+        detailDesc: "【秘術：驚鴻幻影】\n在敵方鏡像對稱位置召喚一個持續 4 秒的「同步幻體分身」。分身具備碰撞體積，能協助防守，並會模仿本體的一舉一動。\n\n【武技：霓裳羽衣步】\n向前發射粉紅羽衣舞步氣功（傷害30）。★當分身存在時，分身會同步釋放一發武技氣功。當分身同步釋放武技完畢後，幻影便會立刻功成身退、消散不見。\n\n【絕技：天鵝鏡花舞】(消耗4點)\n當球位於前方220像素內可施放。為真氣球注入魅惑之舞，使球以6.5的速度向前推進，並啟動「不規則蛇行漂移」狀態，球會沿著不規則的左右弧線扭動，極難防守。"
+    },
+    { 
+        id: 5, name: "拳師", type: "反擊型", maxHp: 200, speed: 3.5, maxMp: 100, ultCost: 5, spCost: 15, s1Cost: 20, spCdMax: 160, s1CdMax: 60, 
+        spName: "借力打力", s1Name: "撼天百烈拳", ultName: "北斗傲蒼穹",
+        desc: "剛猛霸氣。擅長防守反擊與摧毀敵方內力。其終極大招破壞力極強，具備越撞越大的霸道特性。",
+        detailDesc: "【秘術：借力打力】\n架起太極反彈雙掌，期間完全免疫一切對手招式傷害。此時若有敵方氣功砸中你，你非但不扣血，還能將其化為自己的真氣（MP+35）與絕技點數（奧義+1）。\n\n【武技：撼天百烈拳】\n向前打出一記百烈拳風，砸中對手造成40點高額伤害。若擊中真氣球，球將附帶「蝕氣」狀態，此時對手如果用身體接球，全身上下的真氣將瞬間被蒸發 50 點！\n\n【絕技：北斗傲蒼穹】(消耗5點)\n轟出一發半徑24的北斗粉紅氣勁大招，重創路徑上的對手(造成110點傷害)。★最霸道的是：當此大招碰到球後不但不會消失，反而還會擴大一圈（半徑再加大），繼續推球向前轟殺！"
+    }
+];
+
+// 頓悟點種類與圖解對應陣列
+const ITEM_TYPES = [
+    { type: 'ult', color: '#ff4500', label: '絕', desc: '<b>【修為】奧義能量點 +1</b><br>直接獲得 1 點珍貴的絕技奧義能量，加速大招解鎖。' },
+    { type: 'mp', color: '#1e90ff', label: '氣', desc: '<b>【補氣】真氣值 +40</b><br>瞬間回復 40 點身法真氣，可更多次釋放門派秘術與武技。' },
+    { type: 'hp', color: '#32cd32', label: '療', desc: '<b>【療傷】體力值 +45</b><br>藥到病除，立刻回復 45 點生命體力，延長戰局續航。' },
+    { type: 'atk', color: '#ff0000', label: '攻', desc: '<b>【強攻】神力附身 (持續12秒)</b><br>期間施展秘術撞擊真氣球，球速將會獲得 <b>1.4 倍</b> 的恐怖反彈加成。' },
+    { type: 'def', color: '#00ffff', label: '防', desc: '<b>【橫練】身形拓寬 (持續12秒)</b><br>護體罡氣環繞，角色防守判定寬度直接<b>拓寬 1.25 倍</b>，防守天衣無縫。' },
+    { type: 'spd', color: '#ffd700', label: '速', desc: '<b>【神行】身法加速 (持續12秒)</b><br>腳踏風火，角色的搖桿橫移身法速度大幅<b>提升 1.45 倍</b>，補位如鬼魅。' }
+];
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const BORDER = 16;
+const fieldWidth = canvas.width - BORDER * 2;
+const fieldHeight = canvas.height - BORDER * 2;
+
+let player, ai;
+let ball = { 
+    x: 200, y: 325, vx: 0, vy: 0, radius: 9, speed: 2.5, 
+    status: "normal", timer: 0, lastHitBy: null,
+    specialType: "none", driftDir: 1, history: [] 
+};
+let bullets = []; 
+let particles = []; 
+let fieldItems = []; 
+let daoShield = null; 
+
+let p1Score = 0, p2Score = 0;
+let gameActive = false;
+let itemSpawnTimer = 120;
+
+let joystickX = 0; 
+let isDraggingJoystick = false;
+
+let countdownTimer = 180; 
+let countdownText = "3";
+let p1ScoreScale = 1.0;   
+let p2ScoreScale = 1.0;   
+
+const charListDiv = document.getElementById("char-list");
+let selectedCharId = 0;
+
+function updateDetailPanel(id) {
+    const c = CHARACTERS[id];
+    document.getElementById("detail-title").innerText = `${c.name} (${c.type})`;
+    document.getElementById("detail-stats").innerText = `體力: ${c.maxHp} | 秘術: ${c.spCost} | 武技: ${c.s1Cost} | 絕技消耗: ${c.ultCost}點`;
+    document.getElementById("detail-desc").innerText = c.desc;
+}
+
+// 修正點2：選單彈窗增加頓悟說明，並以 HTML 仿 Canvas 樣式繪製 Buff 標籤
+function openModal(type) {
+    const titleEl = document.getElementById("modal-title");
+    const bodyEl = document.getElementById("modal-body");
+    
+    // 清空舊內容
+    bodyEl.innerHTML = "";
+
+    if (type === 'rules') {
+        titleEl.innerText = "武林規矩 (規則說明)";
+        bodyEl.innerText = "【基本玩法】\n這是一場結合武功與球技的生死決鬥。雙方各據一方，主要目標是利用身體或武學技能將「真氣球」反彈至對手的底線外。\n\n【勝負判定】\n1. 得分致勝：率先將球送入對手底線奪得 5 分者，即可獲勝。\n2. 擊殺致勝：戰鬥中施放的武技與絕技能對敵方造成直接「內傷傷害」，若成功將對方的體力（HP）扣減至 0，則直接獲得最終勝利！";
+    } else if (type === 'controls') {
+        titleEl.innerText = "招式指引 (操控說明)";
+        bodyEl.innerText = "【身法移動】\n滑動左下角的「操控搖桿」，即可控制俠客左右橫移閃切，搶佔擊球角度。\n\n【秘術 (左按鈕)】\n消耗少量真氣施放。各門派秘術自成一格（如瞬移、無敵、架盾或召喚分身），能協助你在千鈞一髮之際死裡逃生。\n\n【武技 (right按鈕)】\n消耗真氣釋放遠程氣功。氣功擊中真氣球時會為球附加「特殊破壞效果」；直接砸中對手則會造成內傷。\n\n【絕技 (右下懸浮大鈕)】\n當角色累積足夠的「奧義能量點（●）」時即可觸發。發動移山倒海的門派終極大招，一擊扭轉乾坤！";
+    } else if (type === 'chars') {
+        const c = CHARACTERS[selectedCharId];
+        titleEl.innerText = `俠客【${c.name}】招式全拆解`;
+        bodyEl.innerText = `【定位屬性】${c.type}俠客\n【初始體力】${c.maxHp} 點\n【技能冷卻】秘術 ${(c.spCdMax/60).toFixed(2)} 秒 | 武技 ${(c.s1CdMax/60).toFixed(2)} 秒\n\n${c.detailDesc}`;
+    } else if (type === 'enlighten') {
+        titleEl.innerText = "天地頓悟點說明";
+        
+        let introText = document.createElement("div");
+        introText.style.marginBottom = "12px";
+        introText.style.color = "#ffd700";
+        introText.innerText = "在對決期間，戰場中央會隨機凝聚「天地頓悟點」。凡是以「真氣球撞擊」或運用「武技氣功擊中」該頓悟點的俠客，均可隔空吸納其內化真意，獲得對應的限時武學效果增幅：";
+        bodyEl.appendChild(introText);
+
+        // 依照程式碼中 ITEM_TYPES 繪製出每個 buff 的外觀與效果說明
+        ITEM_TYPES.forEach(item => {
+            let row = document.createElement("div");
+            row.className = "buff-demo-row";
+
+            let tag = document.createElement("div");
+            tag.className = "buff-demo-tag";
+            tag.style.backgroundColor = item.color;
+            tag.innerText = item.label;
+
+            let text = document.createElement("div");
+            text.className = "buff-demo-text";
+            text.innerHTML = item.desc;
+
+            row.appendChild(tag);
+            row.appendChild(text);
+            bodyEl.appendChild(row);
+        });
+    }
+    document.getElementById("info-modal").style.display = "flex";
+}
+
+function closeModal(e) {
+    document.getElementById("info-modal").style.display = "none";
+}
+
+CHARACTERS.forEach((c, idx) => {
+    const card = document.createElement("div");
+    card.className = `char-card ${idx === 0 ? 'selected' : ''}`;
+    card.innerText = c.name;
+    card.onclick = () => {
+        document.querySelectorAll(".char-card").forEach(el => el.classList.remove("selected"));
+        card.classList.add("selected");
+        selectedCharId = idx;
+        updateDetailPanel(idx);
+    };
+    charListDiv.appendChild(card);
+});
+updateDetailPanel(0);
+
+document.getElementById("start-btn").onclick = () => {
+    document.getElementById("char-select").style.display = "none";
+    document.getElementById("game-container").style.display = "flex";
+    document.body.classList.add("game-running");
+    initGame(selectedCharId);
+};
+
+function initGame(p1Id) {
+    const p1Data = CHARACTERS[p1Id];
+    let p2Id = Math.floor(Math.random() * CHARACTERS.length);
+    if(p2Id === p1Id) p2Id = (p2Id + 1) % CHARACTERS.length;
+    const p2Data = CHARACTERS[p2Id];
+
+    document.getElementById("txt-sp").innerText = p1Data.spName;
+    document.getElementById("txt-s1").innerText = p1Data.s1Name;
+
+    player = {
+        x: canvas.width / 2, y: canvas.height - BORDER - 20, w: 70, h: 14, id: p1Id, ...p1Data,
+        hp: p1Data.maxHp, mp: 40, ult: 0, isP1: true,
+        spTimer: 0, scale: 1, isShield: false, shadowTrails: [], clones: [],
+        jumpY: 0, jumpTimer: 0, ultVisualTimer: 0,
+        spCd: 0, s1Cd: 0, 
+        buffs: { atk:0, def:0, spd:0 }
+    };
+
+    ai = {
+        x: canvas.width / 2, y: BORDER + 20, w: 70, h: 14, id: p2Id, ...p2Data,
+        hp: p2Data.maxHp, mp: 40, ult: 0, isP1: false,
+        spTimer: 0, scale: 1, isShield: false, shadowTrails: [], clones: [],
+        jumpY: 0, jumpTimer: 0, ultVisualTimer: 0,
+        spCd: 0, s1Cd: 0, 
+        buffs: { atk:0, def:0, spd:0 },
+        aiTargetX: canvas.width / 2, aiDecisionTimer: 0
+    };
+
+    setupJoystick();
+    setupButtons();
+    startCountdown(0); 
+    gameActive = true;
+    requestAnimationFrame(gameLoop);
+}
+
+function startCountdown(loser) {
+    countdownTimer = 180;
+    resetBallData(loser);
+}
+
+function resetBallData(loser) {
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height / 2;
+    ball.speed = 2.8; 
+    ball.status = "normal";
+    ball.specialType = "none";
+    ball.lastHitBy = null;
+    ball.history = [];
+    ball.vx = 0;
+    ball.vy = 0;
+    let angle = (Math.random() * 30 - 15) * Math.PI / 180; 
+    let dir = loser === 0 ? (Math.random() > 0.5 ? 1 : -1) : (loser === 1 ? -1 : 1);
+    ball.nextVx = ball.speed * Math.sin(angle);
+    ball.nextVy = ball.speed * Math.cos(angle) * dir;
+}
+
+function launchBall() {
+    ball.vx = ball.nextVx;
+    ball.vy = ball.nextVy;
+}
+
+function setupJoystick() {
+    const zone = document.getElementById("joystick-zone");
+    const stick = document.getElementById("joystick-stick");
+    const base = document.getElementById("joystick-base");
+    const maxRadius = 32; 
+
+    function handleMove(clientX) {
+        const baseRect = base.getBoundingClientRect();
+        const centerX = baseRect.left + baseRect.width / 2;
+        let deltaX = clientX - centerX;
+        if (deltaX > maxRadius) deltaX = maxRadius;
+        if (deltaX < -maxRadius) deltaX = -maxRadius;
+        stick.style.transform = `translateX(${deltaX}px)`;
+        joystickX = deltaX / maxRadius; 
+    }
+    zone.addEventListener("touchstart", (e) => { isDraggingJoystick = true; handleMove(e.touches[0].clientX); }, {passive: true});
+    window.addEventListener("touchmove", (e) => {
+        if (!isDraggingJoystick) return;
+        for (let i = 0; i < e.touches.length; i++) {
+            if (e.touches[i].clientX < window.innerWidth * 0.45) { handleMove(e.touches[i].clientX); break; }
+        }
+    }, {passive: true});
+    window.addEventListener("touchend", (e) => {
+        let leftTouchExists = false;
+        for (let i = 0; i < e.touches.length; i++) { if (e.touches[i].clientX < window.innerWidth * 0.45) leftTouchExists = true; }
+        if (!leftTouchExists) { isDraggingJoystick = false; stick.style.transform = `translateX(0px)`; joystickX = 0; }
+    });
+    zone.addEventListener("mousedown", (e) => { isDraggingJoystick = true; handleMove(e.clientX); });
+    window.addEventListener("mousemove", (e) => { if (isDraggingJoystick) handleMove(e.clientX); });
+    window.addEventListener("mouseup", () => { isDraggingJoystick = false; stick.style.transform = `translateX(0px)`; joystickX = 0; });
+}
+
+function setupButtons() {
+    const bind = (id, action) => {
+        const el = document.getElementById(id);
+        el.onclick = (e) => { e.preventDefault(); action(); };
+        el.addEventListener("touchstart", (e) => { e.preventDefault(); action(); }, {passive: false});
+    };
+    bind("btn-sp", () => useSp(player));
+    bind("btn-s1", () => useS1(player));
+    bind("ult-circle-btn", () => { if(player.ult >= player.ultCost) useUlt(player); });
+}
+
+function applyBuff(char, type) {
+    if (type === 'ult') { char.ult = Math.min(5, char.ult + 1); }
+    else if (type === 'mp') { char.mp = Math.min(char.maxMp, char.mp + 40); }
+    else if (type === 'hp') { char.hp = Math.min(char.maxHp, char.hp + 45); }
+    else { char.buffs[type] = 720; } 
+}
+
+function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x: x, y: y,
+            vx: (Math.random() - 0.5) * 5,
+            vy: (Math.random() - 0.5) * 5,
+            size: Math.random() * 3 + 2,
+            color: color,
+            alpha: 1
+        });
+    }
+}
+
+function useSp(char) {
+    if (countdownTimer > 0) return;
+    if (char.mp < char.spCost || char.spCd > 0 || char.spTimer > 0) return;
+    
+    char.mp -= char.spCost;
+    char.spTimer = 35; 
+    char.spCd = char.spCdMax; 
+
+    if (char.id === 0) { 
+        let dist = (char.isP1 ? joystickX : (char.x < ball.x ? 1 : -1)) >= 0 ? 65 : -65;
+        for(let i=1; i<=3; i++) { char.shadowTrails.push({x: char.x + (dist/3)*i, y: char.y + char.jumpY, alpha: 0.6 - i*0.15}); }
+        char.x += dist;
+    } else if (char.id === 1) { 
+        char.jumpTimer = 30; 
+    } else if (char.id === 2) { 
+        char.scale = 2.0;
+    } else if (char.id === 3) { 
+        char.scale = 0.6; 
+    } else if (char.id === 4) { 
+        let mirrorX = canvas.width - char.x;
+        let cloneY = char.isP1 ? char.y - 120 : char.y + 120;
+        char.clones.push({ x: mirrorX, y: cloneY, w: char.w, h: char.h, timer: 240 });
+        createParticles(mirrorX, cloneY, "#da70d6", 15);
+    } else if (char.id === 5) { 
+        char.isShield = true;
+    }
+    checkPaddleHitSp(char);
+}
+
+function checkPaddleHitSp(char) {
+    if (countdownTimer > 0) return; 
+    let actualY = char.y + char.jumpY;
+    let distToBall = Math.hypot(ball.x - char.x, ball.y - actualY);
+    if (distToBall < 50) {
+        let dir = char.isP1 ? -1 : 1;
+        let baseSpd = char.id === 3 ? 9.5 : 6.0; 
+        if (char.buffs.atk > 0) baseSpd *= 1.4;
+        if (char.id === 1 && char.jumpTimer > 0) baseSpd *= 1.5;
+
+        ball.speed = baseSpd;
+        let offset = (ball.x - char.x) / (char.w/2);
+        ball.vx = ball.speed * offset * 0.6;
+        ball.vy = dir * ball.speed;
+        ball.lastHitBy = char;
+        ball.specialType = "none"; 
+        createParticles(ball.x, ball.y, "#ffd700", 15);
+    }
+}
+
+function useS1(char) {
+    if (countdownTimer > 0) return;
+    if (char.mp < char.s1Cost || char.s1Cd > 0) return;
+
+    char.mp -= char.s1Cost;
+    char.s1Cd = char.s1CdMax; 
+    
+    let dir = char.isP1 ? -1 : 1;
+    let bVy = dir * 5.5;
+    if (char.id === 1 && char.jumpTimer > 0) bVy = dir * 9.0; 
+
+    bullets.push({
+        x: char.x, y: char.y + char.jumpY + dir * 15, vx: 0, vy: bVy,
+        r: char.id === 2 ? 15 : 7, 
+        dmg: char.id === 5 ? 40 : 30, 
+        color: char.id === 1 ? "#eeeecc" : (char.id === 3 ? "#440066" : "#ff4500"),
+        owner: char,
+        isS1: true
+    });
+
+    if (char.id === 4 && char.clones.length > 0) {
+        char.clones.forEach((cl, index) => {
+            bullets.push({
+                x: cl.x, y: cl.y + dir * 15, vx: 0, vy: dir * 5.5,
+                r: 7, dmg: 30, color: "#ff85c0", owner: char, isS1: true
+            });
+            createParticles(cl.x, cl.y, "#ff85c0", 10);
+        });
+        char.clones = []; 
+    }
+}
+
+function useUlt(char) {
+    if (countdownTimer > 0) return; 
+    char.transparent = true;
+    char.ult -= char.ultCost;
+    let dir = char.isP1 ? -1 : 1;
+    
+    char.ultVisualTimer = 45; 
+
+    if (char.id === 0) { 
+        bullets.push({ x: char.x, y: char.y + dir*20, vx: 0, vy: dir * 4.5, r: 32, dmg: 90, color: "#ff8c00", owner: char });
+    } else if (char.id === 1) { 
+        if (Math.abs(ball.y - char.y) < 220) {
+            ball.speed = 8.5; ball.status = "stealth"; ball.timer = 100; ball.vy = dir * ball.speed; ball.lastHitBy = char;
+            ball.specialType = "none";
+        }
+    } else if (char.id === 2) { 
+        daoShield = { y: canvas.height / 2, w: fieldWidth * 0.6, timer: 1080, hits: 3, isP1: char.isP1 };
+    } else if (char.id === 3) { 
+        bullets.push({ x: char.x, y: char.y + dir * 20, vx: 0, vy: dir * 14.0, r: 12, dmg: 120, color: "#cc0000", owner: char, isUltThrust: true });
+    } else if (char.id === 4) { 
+        if (Math.abs(ball.y - char.y) < 220) {
+            ball.speed = 6.5; ball.status = "drift"; ball.timer = 120; ball.vy = dir * ball.speed; ball.lastHitBy = char;
+            ball.specialType = "none";
+        }
+    } else if (char.id === 5) { 
+        bullets.push({ x: char.x, y: char.y + dir*20, vx: 0, vy: dir * 6.0, r: 24, dmg: 110, color: "#ff1493", owner: char, isQinUlt: true });
+    }
+    createParticles(char.x, char.y + char.jumpY, "#ff4500", 25);
+}
+
+function updateLogic() {
+    if (countdownTimer > 0) {
+        countdownTimer--;
+        if (countdownTimer >= 120) countdownText = "3";
+        else if (countdownTimer >= 60) countdownText = "2";
+        else countdownText = "1";
+
+        if (countdownTimer === 0) launchBall();
+    }
+
+    if (p1ScoreScale > 1.0) p1ScoreScale -= 0.04;
+    if (p2ScoreScale > 1.0) p2ScoreScale -= 0.04;
+
+    [player, ai].forEach(c => {
+        if(c.mp < c.maxMp) c.mp += 0.18;
+        
+        if (c.spCd > 0) c.spCd--;
+        if (c.s1Cd > 0) c.s1Cd--;
+        if (c.ultVisualTimer > 0) c.ultVisualTimer--;
+
+        Object.keys(c.buffs).forEach(b => { if (c.buffs[b] > 0) c.buffs[b]--; });
+        
+        if (c.id === 1 && c.jumpTimer > 0) {
+            c.jumpTimer--;
+            let jumpDir = c.isP1 ? -1 : 1;
+            c.jumpY = jumpDir * Math.sin((c.jumpTimer / 30) * Math.PI) * 45;
+            if (c.jumpTimer === 0) c.jumpY = 0;
+            if (c.jumpTimer % 3 === 0) c.shadowTrails.push({ x: c.x, y: c.y + c.jumpY, alpha: 0.5 });
+        }
+
+        if (c.ultVisualTimer > 0 && (c.id === 1 || c.id === 4)) {
+            if (c.ultVisualTimer % 4 === 0) {
+                c.shadowTrails.push({ x: c.x, y: c.y + c.jumpY, alpha: 0.6 });
+            }
+        }
+
+        for (let i = c.shadowTrails.length - 1; i >= 0; i--) {
+            c.shadowTrails[i].alpha -= 0.03;
+            if (c.shadowTrails[i].alpha <= 0) c.shadowTrails.splice(i, 1);
+        }
+        for (let i = c.clones.length - 1; i >= 0; i--) {
+            c.clones[i].timer--;
+            if (c.clones[i].timer <= 0) c.clones.splice(i, 1);
+        }
+        if (c.spTimer > 0) { c.spTimer--; if(c.spTimer===0){ c.scale=1; c.isShield=false; } }
+    });
+
+    if (daoShield) {
+        daoShield.timer--;
+        if (daoShield.timer <= 0 || daoShield.hits <= 0) { daoShield = null; }
+    }
+
+    // 頓悟點凝聚機制
+    itemSpawnTimer--;
+    if (itemSpawnTimer <= 0 && fieldItems.length < 3) {
+        let it = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+        fieldItems.push({ x: Math.random() * (fieldWidth - 40) + BORDER + 20, y: Math.random() * 250 + 200, w: 22, h: 22, ...it });
+        itemSpawnTimer = 220 + Math.random() * 150;
+    }
+
+    let moveMod = 1.0; if (player.buffs.spd > 0) moveMod *= 1.45;
+    player.x += player.speed * joystickX * moveMod;
+    let pWidth = player.w * player.scale; if (player.buffs.def > 0) pWidth *= 1.25;
+    player.x = Math.max(BORDER + pWidth/2, Math.min(canvas.width - BORDER - pWidth/2, player.x));
+
+    ai.aiDecisionTimer--;
+    if (ai.aiDecisionTimer <= 0) {
+        ai.aiTargetX = ball.x + (Math.random() * 30 - 15);
+        ai.aiDecisionTimer = 10 + Math.random() * 10;
+    }
+    let aiMoveMod = 1.0; if (ai.buffs.spd > 0) aiMoveMod *= 1.45;
+    if (ai.x < ai.aiTargetX - 6) ai.x += ai.speed * 0.8 * aiMoveMod;
+    else if (ai.x > ai.aiTargetX + 6) ai.x -= ai.speed * 0.8 * aiMoveMod;
+    let aiWidth = ai.w * ai.scale; if (ai.buffs.def > 0) aiWidth *= 1.25;
+    ai.x = Math.max(BORDER + aiWidth/2, Math.min(canvas.width - BORDER - aiWidth/2, ai.x));
+
+    if (countdownTimer <= 0) {
+        if (ai.ult >= ai.ultCost && Math.random() < 0.015) useUlt(ai);
+        if (ai.s1Cd === 0 && ai.mp >= ai.s1Cost && Math.abs(ball.x - ai.x) < 70 && Math.random() < 0.025) useS1(ai);
+        if (ai.spCd === 0 && ai.mp >= ai.spCost && Math.hypot(ball.x - ai.x, ball.y - ai.y) < 60 && Math.random() < 0.12) useSp(ai);
+    }
+
+    if (ball.status === "drift") ball.vx += Math.sin(ball.timer * 0.15) * 0.9;
+    if (ball.specialType === "dancer_wave") ball.vx = Math.sin(ball.y * 0.05) * 4.0;
+
+    if (countdownTimer <= 0) {
+        ball.x += ball.vx; ball.y += ball.vy;
+    }
+
+    if (Math.hypot(ball.vx, ball.vy) > 5.5) {
+        ball.history.push({x: ball.x, y: ball.y});
+        if (ball.history.length > 4) ball.history.shift();
+    } else { ball.history = []; }
+
+    if (ball.x - ball.radius <= BORDER) { ball.x = BORDER + ball.radius; ball.vx *=-1; }
+    if (ball.x + ball.radius >= canvas.width - BORDER) { ball.x = canvas.width - BORDER - ball.radius; ball.vx *=-1; }
+
+    if (daoShield && countdownTimer <= 0) {
+        let isBallCross = false;
+        if (daoShield.isP1 && ball.vy > 0 && ball.y >= daoShield.y - 6 && ball.y <= daoShield.y + 12) isBallCross = true;
+        if (!daoShield.isP1 && ball.vy < 0 && ball.y <= daoShield.y + 6 && ball.y >= daoShield.y - 12) isBallCross = true;
+        
+        if (isBallCross && Math.abs(ball.x - (canvas.width/2)) < daoShield.w/2) {
+            ball.vy *= -1; 
+            daoShield.hits--;
+            createParticles(ball.x, ball.y, "#ffd700", 15);
+        }
+    }
+
+    function checkPaddleBounce(paddle) {
+        if (countdownTimer > 0) return false; 
+        let actualW = paddle.w * paddle.scale;
+        if (paddle.buffs.def > 0) actualW *= 1.25; 
+        let actualY = paddle.y + paddle.jumpY;
+        
+        let isHit = (ball.x >= paddle.x - actualW/2 && ball.x <= paddle.x + actualW/2 && Math.abs(ball.y - actualY) < 14);
+
+        if (isHit) {
+            let isPhysicalBody = (paddle.spTimer === 0); 
+            if (ball.specialType === "sword_wave" && isPhysicalBody) {
+                paddle.hp = Math.max(0, paddle.hp - 30); 
+                createParticles(ball.x, ball.y, "#ff0000", 15);
+                checkGameOver();
+            }
+            if (ball.specialType === "drain_essence" && isPhysicalBody) {
+                paddle.mp = Math.max(0, paddle.mp - 50); 
+                createParticles(ball.x, ball.y, "#32cd32", 15);
+            }
+
+            let offset = (ball.x - paddle.x) / (actualW / 2);
+            let dir = paddle.isP1 ? -1 : 1;
+            let retSpd = 3.5; 
+            
+            if (paddle.id === 3 && paddle.scale < 1.0) retSpd *= 2.3; 
+            if (paddle.id === 1 && paddle.jumpTimer > 0) retSpd *= 1.6; 
+
+            ball.speed = retSpd;
+            ball.vx = ball.speed * offset * 0.75;
+            ball.vy = dir * ball.speed;
+            ball.status = "normal"; ball.specialType = "none"; ball.lastHitBy = paddle;
+            createParticles(ball.x, ball.y, "#ffffff", 6);
+            return true;
+        }
+        return false;
+    }
+
+    if (ball.vy > 0 && ball.y >= player.y + player.jumpY - 14) { if(checkPaddleBounce(player)) ball.y = player.y + player.jumpY - 14; }
+    if (ball.vy < 0 && ball.y <= ai.y + ai.jumpY + 14) { if(checkPaddleBounce(ai)) ball.y = ai.y + ai.jumpY + 14; }
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        let b = bullets[i]; b.x += b.vx; b.y += b.vy;
+
+        if (daoShield && b.owner.isP1 !== daoShield.isP1) {
+            if (Math.abs(b.y - daoShield.y) < 15 && Math.abs(b.x - (canvas.width/2)) < daoShield.w/2) {
+                createParticles(b.x, b.y, b.color, 10); bullets.splice(i, 1); continue;
+            }
+        }
+
+        if (b.isUltThrust) {
+            let target = b.owner.isP1 ? ai : player;
+            let tW = target.w * target.scale;
+            if (Math.abs(b.y - (target.y + target.jumpY)) < 16 && Math.abs(b.x - target.x) < tW/2) {
+                target.hp = Math.max(0, target.hp - b.dmg);
+                createParticles(b.x, b.y, "#ff0000", 30); bullets.splice(i, 1); checkGameOver(); continue;
+            }
+            if (b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
+            continue;
+        }
+
+        if (Math.hypot(b.x - ball.x, b.y - ball.y) < b.r + ball.radius) {
+            ball.speed = 5.5; ball.vx = ball.speed * ((ball.x - b.x)/16); ball.vy = b.vy > 0 ? ball.speed : -ball.speed;
+            ball.lastHitBy = b.owner;
+            if (b.isS1) {
+                if (b.owner.id === 0) ball.specialType = "sword_wave";    
+                if (b.owner.id === 4) ball.specialType = "dancer_wave";   
+                if (b.owner.id === 5) ball.specialType = "drain_essence"; 
+            }
+            createParticles(ball.x, ball.y, b.color, 12);
+            
+            if (b.isQinUlt) {
+                b.r += 12; 
+                createParticles(b.x, b.y, "#ff69b4", 8);
+            } else {
+                bullets.splice(i, 1); 
+                continue;
+            }
+        }
+
+        if (!b.owner.isP1 && Math.abs(b.y - (player.y + player.jumpY)) < 15 && Math.abs(b.x - player.x) < (player.w*player.scale/2 + b.r)) {
+            if (player.isShield) { player.transparent = false; player.ult = Math.min(5, player.ult+1); player.mp = Math.min(player.maxMp, player.mp+35); }
+            else { player.hp = Math.max(0, player.hp - b.dmg); }
+            createParticles(b.x, b.y, b.color, 12); bullets.splice(i, 1); checkGameOver(); continue;
+        }
+        if (b.owner.isP1 && Math.abs(b.y - (ai.y + ai.jumpY)) < 15 && Math.abs(b.x - ai.x) < (ai.w*ai.scale/2 + b.r)) {
+            if (ai.isShield) { ai.transparent = false; ai.ult = Math.min(5, ai.ult+1); ai.mp = Math.min(ai.maxMp, ai.mp+35); }
+            else { ai.hp = Math.max(0, ai.hp - b.dmg); }
+            createParticles(b.x, b.y, b.color, 12); bullets.splice(i, 1); checkGameOver(); continue;
+        }
+
+        if (b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
+    }
+
+    // 檢測是否觸發天地頓悟點
+    for (let i = fieldItems.length - 1; i >= 0; i--) {
+        let it = fieldItems[i]; let luckyGuy = null;
+        if (Math.abs(ball.x - it.x) < it.w/2 + ball.radius && Math.abs(ball.y - it.y) < it.h/2 + ball.radius) {
+            luckyGuy = ball.lastHitBy; createParticles(it.x, it.y, it.color, 15); fieldItems.splice(i, 1);
+        } else {
+            for(let j=0; j<bullets.length; j++) {
+                let b = bullets[j];
+                if (Math.abs(b.x - it.x) < it.w/2 + b.r && Math.abs(b.y - it.y) < it.h/2 + b.r) {
+                    luckyGuy = b.owner; createParticles(it.x, it.y, it.color, 15); fieldItems.splice(i, 1); break;
+                }
+            }
+        }
+        if (luckyGuy) applyBuff(luckyGuy, it.type);
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].x += particles[i].vx; particles[i].y += particles[i].vy; particles[i].alpha -= 0.02;
+        if (particles[i].alpha <= 0) particles.splice(i, 1);
+    }
+
+    if (ball.y < BORDER) { 
+        p1Score++; p1ScoreScale = 2.4; 
+        player.ult = Math.min(5, player.ult + 1); ai.ult = Math.min(5, ai.ult + 1);
+        daoShield = null; 
+        checkScore(); if(gameActive) startCountdown(1); 
+    }
+    else if (ball.y > canvas.height - BORDER) { 
+        p2Score++; p2ScoreScale = 2.4; 
+        player.ult = Math.min(5, player.ult + 1); ai.ult = Math.min(5, ai.ult + 1);
+        daoShield = null; 
+        checkScore(); if(gameActive) startCountdown(0); 
+    }
+
+    let spBtn = document.getElementById("btn-sp");
+    let s1Btn = document.getElementById("btn-s1");
+    if (player.spCd > 0) {
+        spBtn.classList.add("disabled");
+        spBtn.querySelector("span").innerText = `冷卻 ${(player.spCd/60).toFixed(2)}s`;
+    } else {
+        spBtn.classList.remove("disabled");
+        spBtn.querySelector("span").innerText = `真氣 ${player.spCost}`;
+    }
+    if (player.s1Cd > 0) {
+        s1Btn.classList.add("disabled");
+        s1Btn.querySelector("span").innerText = `冷卻 ${(player.s1Cd/60).toFixed(2)}s`;
+    } else {
+        s1Btn.classList.remove("disabled");
+        s1Btn.querySelector("span").innerText = `真氣 ${player.s1Cost}`;
+    }
+
+    document.getElementById("ult-circle-text").innerText = `${Math.floor(player.ult)}/${player.ultCost}`;
+    if (player.ult >= player.ultCost && countdownTimer <= 0) document.getElementById("ult-circle-btn").classList.add("ready");
+    else document.getElementById("ult-circle-btn").classList.remove("ready");
+}
+
+function drawGame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#0f0c08";
+    ctx.fillRect(BORDER, BORDER, fieldWidth, fieldHeight);
+
+    ctx.strokeStyle = "rgba(124,93,67,0.12)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(BORDER, canvas.height/2); ctx.lineTo(canvas.width - BORDER, canvas.height/2); ctx.stroke();
+
+    if (daoShield) {
+        ctx.strokeStyle = daoShield.isP1 ? "rgba(218,112,214,0.7)" : "rgba(255,69,0,0.7)";
+        ctx.shadowColor = daoShield.isP1 ? "#da70d6" : "#ff4500";
+        ctx.shadowBlur = 15; ctx.lineWidth = 6; ctx.beginPath();
+        ctx.moveTo(canvas.width/2 - daoShield.w/2, daoShield.y); ctx.lineTo(canvas.width/2 + daoShield.w/2, daoShield.y);
+        ctx.stroke(); ctx.shadowBlur = 0; 
+    }
+
+    // 渲染戰場上的頓悟點（保持方塊化標籤樣式）
+    fieldItems.forEach(it => {
+        ctx.fillStyle = it.color; ctx.fillRect(it.x - it.w/2, it.y - it.h/2, it.w, it.h);
+        ctx.fillStyle = "#000"; ctx.font = "bold 11px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(it.label, it.x, it.y);
+    });
+
+    [player, ai].forEach(c => {
+        c.shadowTrails.forEach(t => {
+            ctx.fillStyle = c.id === 1 ? `rgba(140, 140, 140, ${t.alpha * 0.5})` : `rgba(212, 175, 55, ${t.alpha})`; 
+            ctx.fillRect(t.x - c.w/2, t.y - c.h/2, c.w, c.h);
+        });
+        c.clones.forEach(cl => {
+            ctx.fillStyle = "rgba(218, 112, 214, 0.35)"; 
+            ctx.fillRect(cl.x - cl.w/2, cl.y - cl.h/2, cl.w, cl.h);
+            ctx.strokeStyle = "rgba(218, 112, 214, 0.7)"; ctx.lineWidth = 1.5;
+            ctx.strokeRect(cl.x - cl.w/2, cl.y - cl.h/2, cl.w, cl.h);
+        });
+    });
+
+    [player, ai].forEach(c => {
+        if (c.ultVisualTimer > 0) {
+            ctx.save();
+            ctx.strokeStyle = c.id === 1 ? "rgba(255,255,255,0.7)" : "rgba(255,105,180,0.7)";
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = c.id === 1 ? "#ffffff" : "#ff69b4";
+            ctx.beginPath();
+            ctx.arc(c.x, c.y + c.jumpY, c.w * 0.8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    });
+
+    let pActualY = player.y + player.jumpY;
+    ctx.fillStyle = player.isShield ? "#00ffff" : (player.spTimer > 0 && player.id === 3 ? "#440066" : "#b8860b");
+    let pWidth = player.w * player.scale; if (player.buffs.def > 0) pWidth *= 1.25;
+    ctx.fillRect(player.x - pWidth/2, pActualY - player.h/2, pWidth, player.h);
+
+    let aiActualY = ai.y + ai.jumpY;
+    ctx.fillStyle = ai.isShield ? "#00ffff" : "#8b0000";
+    let aiWidth = ai.w * ai.scale; if (ai.buffs.def > 0) aiWidth *= 1.25;
+    ctx.fillRect(ai.x - aiWidth/2, aiActualY - ai.h/2, aiWidth, ai.h);
+
+    bullets.forEach(b => {
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = b.color; ctx.fill(); ctx.closePath();
+    });
+
+    ball.history.forEach((pos, idx) => {
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, ball.radius * (0.4 + idx*0.15), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(244, 237, 210, ${0.1 + idx * 0.15})`; ctx.fill(); ctx.closePath();
+    });
+
+    if (!(ball.status === "stealth" && ball.timer % 14 < 6)) {
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        if (ball.specialType === "sword_wave") ctx.fillStyle = "#ff3300"; 
+        else if (ball.specialType === "drain_essence") ctx.fillStyle = "#32cd32"; 
+        else if (ball.status === "drift" && ball.timer % 4 < 2) ctx.fillStyle = "#da70d6";
+        else ctx.fillStyle = "#f4edd2"; 
+        ctx.fill(); ctx.closePath();
+    }
+
+    particles.forEach(p => {
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.alpha; ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+    ctx.globalAlpha = 1.0;
+
+    // HUD 繪製
+    ctx.font = "bold 11px monospace"; ctx.textBaseline = "middle";
+    let aiBarW = 100;
+    let aiCenterY = BORDER / 2;
+
+    ctx.fillStyle = "#443322"; ctx.fillRect(BORDER + 5, aiCenterY - 5, aiBarW, 4);
+    ctx.fillStyle = "#cc2222"; ctx.fillRect(BORDER + 5, aiCenterY - 5, aiBarW * Math.max(0, Math.min(1, ai.hp/ai.maxHp)), 4);
+    ctx.fillStyle = "#443322"; ctx.fillRect(BORDER + 5, aiCenterY + 1, aiBarW, 3);
+    ctx.fillStyle = "#1e90ff"; ctx.fillRect(BORDER + 5, aiCenterY + 1, aiBarW * Math.max(0, Math.min(1, ai.mp/ai.maxMp)), 3);
+
+    ctx.textAlign = "left"; ctx.fillStyle = "#da70d6";
+    let aiUltCount = Math.max(0, Math.min(5, Math.floor(ai.ult)));
+    let aiDots = "●".repeat(aiUltCount) + "○".repeat(5 - aiUltCount);
+    ctx.fillText(aiDots, canvas.width / 2 - 35, aiCenterY);
+    
+    // 渲染吸納頓悟後的狀態標籤
+    let currentStartX = canvas.width / 2 + 35;
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "center";
+    if (ai.buffs.atk > 0) {
+        ctx.fillStyle = "#ff0000"; ctx.fillRect(currentStartX, aiCenterY - 6, 26, 12);
+        ctx.fillStyle = "#000"; ctx.fillText(`攻${Math.ceil(ai.buffs.atk/60)}`, currentStartX + 13, aiCenterY);
+        currentStartX += 29;
+    }
+    if (ai.buffs.def > 0) {
+        ctx.fillStyle = "#00ffff"; ctx.fillRect(currentStartX, aiCenterY - 6, 26, 12);
+        ctx.fillStyle = "#000"; ctx.fillText(`防${Math.ceil(ai.buffs.def/60)}`, currentStartX + 13, aiCenterY);
+        currentStartX += 29;
+    }
+    if (ai.buffs.spd > 0) {
+        ctx.fillStyle = "#ffd700"; ctx.fillRect(currentStartX, aiCenterY - 6, 26, 12);
+        ctx.fillStyle = "#000"; ctx.fillText(`速${Math.ceil(ai.buffs.spd/60)}`, currentStartX + 13, aiCenterY);
+    }
+
+    // 玩家 HUD
+    ctx.font = "bold 11px monospace";
+    let pCenterY = canvas.height - (BORDER / 2);
+    ctx.fillStyle = "#443322"; ctx.fillRect(BORDER + 5, pCenterY - 5, aiBarW, 4);
+    ctx.fillStyle = "#cc2222"; ctx.fillRect(BORDER + 5, pCenterY - 5, aiBarW * Math.max(0, Math.min(1, player.hp/player.maxHp)), 4);
+    ctx.fillStyle = "#443322"; ctx.fillRect(BORDER + 5, pCenterY + 1, aiBarW, 3);
+    ctx.fillStyle = "#1e90ff"; ctx.fillRect(BORDER + 5, pCenterY + 1, aiBarW * Math.max(0, Math.min(1, player.mp/player.maxMp)), 3);
+
+    ctx.textAlign = "left"; ctx.fillStyle = "#da70d6";
+    let p1UltCount = Math.max(0, Math.min(5, Math.floor(player.ult)));
+    let p1Dots = "●".repeat(p1UltCount) + "○".repeat(5 - p1UltCount);
+    ctx.fillText(p1Dots, canvas.width / 2 - 35, pCenterY);
+
+    currentStartX = canvas.width / 2 + 35;
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "center";
+    if (player.buffs.atk > 0) {
+        ctx.fillStyle = "#ff0000"; ctx.fillRect(currentStartX, pCenterY - 6, 26, 12);
+        ctx.fillStyle = "#000"; ctx.fillText(`攻${Math.ceil(player.buffs.atk/60)}`, currentStartX + 13, pCenterY);
+        currentStartX += 29;
+    }
+    if (player.buffs.def > 0) {
+        ctx.fillStyle = "#00ffff"; ctx.fillRect(currentStartX, pCenterY - 6, 26, 12);
+        ctx.fillStyle = "#000"; ctx.fillText(`防${Math.ceil(player.buffs.def/60)}`, currentStartX + 13, pCenterY);
+        currentStartX += 29;
+    }
+    if (player.buffs.spd > 0) {
+        ctx.fillStyle = "#ffd700"; ctx.fillRect(currentStartX, pCenterY - 6, 26, 12);
+        ctx.fillStyle = "#000"; ctx.fillText(`速${Math.ceil(player.buffs.spd/60)}`, currentStartX + 13, pCenterY);
+    }
+
+    let centerY = canvas.height / 2;
+    ctx.font = "bold 15px 'PingFang TC', sans-serif";
+    ctx.fillStyle = "rgba(244, 237, 210, 0.25)";
+    ctx.textAlign = "right"; ctx.fillText(`↓ ${player.name}`, canvas.width / 2 - 55, centerY);
+    ctx.textAlign = "left";  ctx.fillText(`${ai.name} ↑`, canvas.width / 2 + 55, centerY);
+    ctx.textAlign = "center"; ctx.fillText(":", canvas.width / 2, centerY);
+
+    ctx.save(); ctx.translate(canvas.width / 2 - 25, centerY); ctx.scale(p1ScoreScale, p1ScoreScale);
+    ctx.font = "bold 16px Arial"; ctx.fillStyle = p1ScoreScale > 1.05 ? "#00ffcc" : "rgba(244, 237, 210, 0.3)";
+    ctx.textAlign = "center"; ctx.fillText(p1Score, 0, 0); ctx.restore();
+
+    ctx.save(); ctx.translate(canvas.width / 2 + 25, centerY); ctx.scale(p2ScoreScale, p2ScoreScale);
+    ctx.font = "bold 16px Arial"; ctx.fillStyle = p2ScoreScale > 1.05 ? "#ffcc00" : "rgba(244, 237, 210, 0.3)";
+    ctx.textAlign = "center"; ctx.fillText(p2Score, 0, 0); ctx.restore();
+
+    if (countdownTimer > 0) {
+        ctx.save();
+        ctx.fillStyle = "#ffd700"; ctx.shadowColor = "#ff4500"; ctx.shadowBlur = 12;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        let innerFrame = countdownTimer % 60;
+        let scalePulse = 1.0 + (innerFrame / 60) * 1.4; 
+        ctx.font = `bold ${Math.floor(28 * scalePulse)}px Georgia`;
+        ctx.fillText(countdownText, ball.x, ball.y - 28);
+        ctx.restore();
+    }
+}
+
+function gameLoop() {
+    if (!gameActive) return;
+    updateLogic();
+    drawGame();
+    requestAnimationFrame(gameLoop);
+}
+
+function checkScore() {
+    if (p1Score >= 5) endGame("名震天下！", "你在華山論球中率先奪得 5 分，榮登武林盟主！");
+    if (p2Score >= 5) endGame("功虧一簣！", "對手率先奪得 5 分。大俠請重新來過！");
+}
+
+function checkGameOver() {
+    if (player.hp <= 0) endGame("力竭落敗！", "大俠體力歸零，遺憾落敗！");
+    if (ai.hp <= 0) endGame("獨步武林！", "對手經脈盡碎，你獲得了最終勝利！");
+}
+
+function endGame(title, desc) {
+    gameActive = false;
+    document.body.classList.remove("game-running");
+    document.getElementById("game-over-screen").style.display = "flex";
+    document.getElementById("result-title").innerText = title;
+    document.getElementById("result-desc").innerText = desc;
+}
+</script>
+</body>
+</html>
