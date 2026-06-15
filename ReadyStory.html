@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>隱世秘境：天氣試煉．長篇傳承版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 500px;
+            max-height: 900px;
+            margin: 0 auto;
+            background: #2c3e50;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        #top-bar {
+            height: 40px;
+            background: #111;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            font-size: 14px;
+            border-bottom: 2px solid #444;
+            z-index: 5;
+        }
+        .weather-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .weather-NONE { background: #7f8c8d; }
+        .weather-SUNNY { background: #e67e22; color: #fff; }
+        .weather-RAINY { background: #2980b9; color: #fff; }
+        .weather-CLOUDY { background: #8e44ad; color: #fff; }
+
+        .screen {
+            flex: 1;
+            position: relative;
+            display: none;
+            flex-direction: column;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* 1. 開始畫面 */
+        #title-screen {
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(to bottom, #1f1c2c, #928dab);
+            text-align: center;
+            padding: 20px;
+        }
+        #title-screen h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+        }
+        #title-screen p {
+            color: #ddd;
+            font-size: 14px;
+            margin-bottom: 40px;
+        }
+        .btn {
+            padding: 12px 35px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        /* 2. 地圖探索畫面 */
+        #map-screen {
+            background: #222;
+        }
+        #map-canvas-container {
+            width: 100%;
+            flex: 1;
+            position: relative;
+            background: #27ae60;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        /* 自訂美化提示框 */
+        #game-toast {
+            position: absolute;
+            top: 20px;
+            left: 10%;
+            width: 80%;
+            background: rgba(44, 62, 80, 0.95);
+            color: #fff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            border-left: 5px solid #e74c3c;
+            border-right: 5px solid #e74c3c;
+            z-index: 99;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            line-height: 1.4;
+        }
+        #game-toast.show { opacity: 1; transform: translateY(0); }
+        #game-toast.info { border-left: 5px solid #f1c40f; border-right: 5px solid #f1c40f; }
+
+        /* 控制操作區 */
+        #control-panel {
+            height: 180px;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 10px;
+            border-top: 2px solid #333;
+        }
+        #joystick-zone {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        #joystick-stick {
+            width: 50px;
+            height: 50px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: transform 0.05s linear;
+        }
+        #action-zone {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .action-btn {
+            width: 80px;
+            height: 50px;
+            background: #34495e;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        /* 3. 劇情對話框 */
+        #dialogue-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.9);
+            border-top: 3px solid #f1c40f;
+            padding: 15px;
+            height: 160px;
+            display: none;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 10;
+        }
+        #dialogue-speaker { font-weight: bold; color: #f1c40f; font-size: 16px; margin-bottom: 5px; }
+        #dialogue-text { font-size: 14px; line-height: 1.5; flex: 1; overflow-y: auto; }
+        #dialogue-hint { text-align: right; font-size: 11px; color: #aaa; animation: blink 1s infinite; }
+
+        /* 4. 戰鬥畫面 */
+        #battle-screen {
+            background: #1c2833;
+            padding: 15px;
+            justify-content: space-between;
+        }
+        #enemy-party, #player-party {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+        }
+        .combatant-card {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 8px;
+            width: 32%;
+            text-align: center;
+            font-size: 11px;
+            position: relative;
+        }
+        .combatant-card.active-turn { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; }
+        .combatant-card.dead { opacity: 0.4; background: #000; }
+        .hp-bar-bg, .mp-bar-bg {
+            width: 100%; background: #444; height: 6px; border-radius: 3px; margin-top: 4px; overflow: hidden;
+        }
+        .hp-bar-fill { background: #2ecc71; height: 100%; width: 100%; transition: width 0.3s; }
+        .mp-bar-fill { background: #3498db; height: 100%; width: 100%; transition: width 0.3s; }
+        .buff-badge { display: inline-block; font-size: 9px; background: #e67e22; padding: 1px 3px; border-radius: 3px; margin-top: 2px; }
+        
+        #battle-log {
+            height: 120px; background: rgba(0,0,0,0.7); border: 1px solid #333; border-radius: 6px;
+            padding: 8px; font-size: 11px; overflow-y: auto; margin: 10px 0; line-height: 1.4;
+        }
+        #battle-menu-container { background: #111; padding: 8px; border-radius: 8px; }
+        #battle-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .battle-btn {
+            background: #34495e; color: white; border: none; padding: 10px;
+            font-size: 13px; border-radius: 6px; font-weight: bold; cursor: pointer;
+        }
+        .battle-btn:disabled { background: #222; color: #555; cursor: not-allowed; }
+
+        /* 隊伍選單浮層 */
+        #menu-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 100;
+            display: none; flex-direction: column; padding: 20px; justify-content: center;
+        }
+        .menu-box { background: #2c3e50; border: 2px solid #f1c40f; border-radius: 12px; padding: 20px; max-height: 80%; overflow-y: auto; }
+        .menu-title { font-size: 18px; color: #f1c40f; text-align: center; margin-bottom: 15px; font-weight: bold; }
+        .menu-content { font-size: 13px; line-height: 1.6; white-space: pre-wrap; margin-bottom: 20px; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="top-bar">
+        <span id="location-text">隱世秘境·試煉起點</span>
+        <div>環境天氣：<span id="weather-display" class="weather-badge weather-NONE">正常</span></div>
+    </div>
+
+    <div id="title-screen" class="screen active">
+        <h1>隱世秘境</h1>
+        <p>～ 天氣與職業的終極傳承試煉 ～</p>
+        <button class="btn" onclick="Game.start()">開啟試煉之旅</button>
+    </div>
+
+    <div id="map-screen" class="screen">
+        <div id="map-canvas-container">
+            <canvas id="mapCanvas"></canvas>
+            <div id="game-toast">提示訊息</div>
+
+            <div id="dialogue-overlay" onclick="Dialogue.next()">
+                <div id="dialogue-speaker">姓名</div>
+                <div id="dialogue-text">對話內容...</div>
+                <div id="dialogue-hint">點擊螢幕繼續...</div>
+            </div>
+        </div>
+
+        <div id="control-panel">
+            <div id="joystick-zone">
+                <div id="joystick-stick"></div>
+            </div>
+            <div id="action-zone">
+                <div class="action-btn" onclick="Game.openMenu()">行囊狀態</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="battle-screen" class="screen">
+        <div id="enemy-party"></div>
+        <div id="battle-log"></div>
+        <div id="player-party"></div>
+        <div id="battle-menu-container">
+            <div id="battle-menu-title" style="font-size:12px; margin-bottom:4px; color:#f1c40f; text-align:center;">選擇行動</div>
+            <div id="battle-menu"></div>
+        </div>
+    </div>
+
+    <div id="menu-overlay" onclick="Game.closeMenu()">
+        <div class="menu-box" onclick="event.stopPropagation()">
+            <div class="menu-title">--- 隊伍當前整備 ---</div>
+            <div id="menu-content-box" class="menu-content">載入中...</div>
+            <button class="btn" style="width:100%; padding:10px; font-size:16px;" onclick="Game.closeMenu()">返回冒險</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==========================================
+// 1. 遊戲核心數據與地圖狀態 (21x21 大地圖)
+// ==========================================
+const WeatherType = { NONE: 'NONE', SUNNY: 'SUNNY', RAINY: 'RAINY', CLOUDY: 'CLOUDY' };
+const WeatherName = { NONE: '正常', SUNNY: '晴天', RAINY: '雨天', CLOUDY: '陰天' };
+
+let gameState = {
+    currentScreen: 'title',
+    isVillage: false, 
+    storyProgress: 0, // 0:初始, 1:雷祭壇完, 2:風祭壇完, 3:救出雨漩, 4:打倒Boss
+    items: { thunderFan: false, wind扇: false, rain傘: false },
+    weather: WeatherType.NONE,
+    weatherTurns: 0,
+    party: [
+        { id: 'leicheng', name: '雷丞', class: '鳴雷士(初級)', lv: 1, hp: 150, maxHp: 150, mp: 50, maxMp: 50, atk: 30, def: 12, type: 'CLOUDY', skills: ['雷擊'], buffs: {} },
+        { id: 'fengqing', name: '風晴', class: '舞風士(初級)', lv: 1, hp: 120, maxHp: 120, mp: 60, maxMp: 60, atk: 24, def: 10, type: 'SUNNY', skills: ['風刃'], buffs: {} }
+    ],
+    playerPos: { x: 10, y: 18 }, 
+    mapGrid: [],
+    gridSize: 32,
+    cols: 21,
+    rows: 21
+};
+
+function showToast(text, type = 'error') {
+    let t = document.getElementById('game-toast');
+    t.innerText = text;
+    t.className = ''; 
+    if(type === 'info') t.classList.add('info');
+    t.classList.add('show');
+    if(window.toastTimer) clearTimeout(window.toastTimer);
+    window.toastTimer = setTimeout(() => { t.classList.remove('show'); }, 3000);
+}
+
+// 技能資料庫 
+const SkillDatabase = {
+    '雷擊': { name: '雷擊', cost: 6, type: 'CLOUDY', power: 35, target: 'enemy', desc: '召喚初級落雷，陰天威力加乘' },
+    '電掣': { name: '電掣', cost: 0, type: 'NONE', power: 0, target: 'self', desc: '回復20點MP，且短時間內自身攻擊力變為1.5倍' },
+    '鳴雷陣陣': { name: '鳴雷陣陣', cost: 25, type: 'CLOUDY', power: 65, target: 'enemy', changeWeather: WeatherType.CLOUDY, desc: '聖物絕技：召喚暴虐雷雲，改變天氣為陰天' },
+    
+    '風刃': { name: '風刃', cost: 6, type: 'SUNNY', power: 30, target: 'enemy', desc: '揮出氣流切裂敵方，晴天威力加乘' },
+    '晴光': { name: '晴光', cost: 10, type: 'NONE', power: 0, target: 'friend', desc: '凝聚和煦晴光，單體回復50點生命值' },
+    '舞風揚揚': { name: '舞風揚揚', cost: 25, type: 'SUNNY', power: 60, target: 'enemy', changeWeather: WeatherType.SUNNY, desc: '聖物絕技：舞動烈風，改變天氣為晴天' },
+    
+    '水彈': { name: '水彈', cost: 6, type: 'RAINY', power: 32, target: 'enemy', desc: '發射高壓水彈，雨天威力加乘' },
+    '霧隱': { name: '霧隱', cost: 12, type: 'NONE', power: 0, target: 'all_friends', desc: '全體進入迷霧狀態3回合，提高避敵率且每回合回復5點MP' },
+    '落雨綿綿': { name: '落雨綿綿', cost: 25, type: 'RAINY', power: 60, target: 'enemy', changeWeather: WeatherType.RAINY, desc: '聖物絕技：喚來不絕細雨，改變天氣為雨天' }
+};
+
+const YuXuanTemplate = { id: 'yuxuan', name: '雨漩', class: '落雨士(初級)', lv: 3, hp: 180, maxHp: 180, mp: 80, maxMp: 80, atk: 35, def: 15, type: 'RAINY', skills: ['水彈', '霧隱'], buffs: {} };
+
+// ==========================================
+// 2. 劇本文本系統
+// ==========================================
+const StoryScripts = [
+    { id: 0, speaker: "旁白", text: "歡迎來到隱世秘境試煉場。掌控天氣的三大世家後裔，必須攜手通過長老設置的高階關卡，才能證道。目前雷丞與風晴，正站在考驗起點。" },
+    { id: 1, speaker: "風晴", text: "雷丞！看地圖標示，左上方是「雷之祭壇」，右上方是「風之祭壇」，我們必須各自完成對應的考驗才能繼續前進！" },
+    { id: 2, speaker: "雷丞", text: "很好！分頭擊破，等我們掌握了宗門核心技，就在中央交界處會合！出發！" },
+    
+    { id: 3, speaker: "祭壇雷靈", text: "少年，體內奔騰著驚雷血脈的傳人。擊敗我的幻影，證明你擁有掌控狂雷的力量！" },
+    { id: 4, speaker: "雷丞", text: "呼...好強的麻痺感。但我成功了！我感覺到了，雷系輔助秘法【電掣】融入了我的氣海！" },
+    
+    { id: 5, speaker: "祭壇風靈", text: "少女，乘風起舞的傳承者。在風暴迷宮中保持清明，擊碎你的軟弱吧！" },
+    { id: 6, speaker: "風晴", text: "完成了！這股暖洋洋的光芒...是風系治癒術【晴光】！這下就不用怕雷丞那個笨蛋受傷了。" },
+    
+    { id: 7, speaker: "藍衣少女", text: "（被多隻兇狠的試煉傀儡重重包圍）...水流壁已經快撐不住了...難道初級落雨士的修行要在這裡止步了嗎？" },
+    { id: 8, speaker: "雷丞", text: "住手！何方妖魔，放開那個漂亮大姊姊！風晴，我們上！" },
+    { id: 9, speaker: "風晴", text: "（敲雷丞腦袋）都什麼時候了還在看漂亮大姊姊！不過救人要緊，動手！" },
+    
+    { id: 10, speaker: "雨漩", text: "謝謝兩位小英豪。我是霧雨家的雨漩，本想深入最終洞窟，卻不慎遭到魔物圍攻。既然大家目標一致，請讓我的【霧隱】奇術助你們一臂之力！" },
+    { id: 11, speaker: "旁白", text: "【系統提示】雨漩正式加入隊伍！前方「最終洞窟」的大門已然開啟。洞窟內藏有三把傳承聖物，必須全部找齊，才能解鎖中央守衛Boss！" },
+    
+    { id: 12, speaker: "最終守衛", text: "前行者，你們竟然集齊了雷之幡、風之扇、雨之傘！聖物已與你們產生共鳴，展現你們領悟的天氣大招吧！" },
+    
+    { id: 13, speaker: "旁白", text: "轟隆隆——！最終守衛轟然倒塌。隨之而來的是一陣炫目的傳送強光，一眨眼，三人已經回到了熱鬧的考驗村鎮中。" },
+    { id: 14, speaker: "風晴", text: "哇！我們被傳送回村子了！快看，長老就在前面廣場等我們呢！" },
+    { id: 15, speaker: "宗門長老", text: "很好，雷丞、風晴、雨漩。你們不但在祭壇中突破自我，更合力取回了三大聖物，達成了數十年來無人做到的完美通關。我在此正式授予你們【鳴雷士】、【舞風士】、【落雨士】的正式職業頭銜！" },
+    { id: 16, speaker: "雷丞 & 風晴 & 雨漩", text: "太好了！我們的正式冒險，現在才要開始呢！ (試煉全劇終，感謝遊玩！)" }
+];
+
+let currentDialogueIndex = 0;
+const Dialogue = {
+    show: function(startId, endId, callback) {
+        document.getElementById('dialogue-overlay').style.display = 'flex';
+        currentDialogueIndex = startId;
+        this.endId = endId;
+        this.callback = callback;
+        this.display();
+    },
+    display: function() {
+        if (currentDialogueIndex > this.endId) { this.close(); return; }
+        let script = StoryScripts.find(s => s.id === currentDialogueIndex);
+        if (script) {
+            document.getElementById('dialogue-speaker').innerText = script.speaker;
+            document.getElementById('dialogue-text').innerText = script.text;
+        }
+    },
+    next: function() { currentDialogueIndex++; this.display(); },
+    close: function() {
+        document.getElementById('dialogue-overlay').style.display = 'none';
+        if (this.callback) this.callback();
+    }
+};
+
+// ==========================================
+// 3. 地圖與繪圖系統 (巨幅地圖與雙場景切換)
+// ==========================================
+const MapSystem = {
+    canvas: null,
+    ctx: null,
+    init: function() {
+        this.canvas = document.getElementById('mapCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        this.buildMap();
+    },
+    resize: function() {
+        let container = document.getElementById('map-canvas-container');
+        if (container) {
+            this.canvas.width = container.clientWidth;
+            this.canvas.height = container.clientHeight;
+        }
+    },
+    buildMap: function() {
+        let grid = [];
+        for(let r=0; r<gameState.rows; r++) {
+            grid[r] = [];
+            for(let c=0; c<gameState.cols; c++) {
+                if(r===0 || r===gameState.rows-1 || c===0 || c===gameState.cols-1) {
+                    grid[r][c] = 1; 
+                } else {
+                    grid[r][c] = 0;
+                }
+            }
+        }
+        
+        for(let c=1; c<gameState.cols-1; c++) {
+            grid[14][c] = 1; 
+            grid[7][c] = 1;  
+        }
+        grid[14][10] = 0; 
+        grid[7][10] = 1;  
+
+        for(let r=8; r<=13; r++) grid[r][5] = 1;
+        grid[11][5] = 0; 
+        grid[9][2] = 2;  
+
+        for(let r=8; r<=13; r++) grid[r][15] = 1;
+        grid[11][15] = 0; 
+        grid[9][18] = 3;  
+
+        grid[10][10] = 4;
+
+        grid[4][3] = 5;   
+        grid[2][10] = 8;  
+        grid[4][17] = 6;  
+        grid[5][10] = 7;  
+
+        gameState.mapGrid = grid;
+    },
+    buildVillageMap: function() {
+        let grid = [];
+        for(let r=0; r<gameState.rows; r++) {
+            grid[r] = [];
+            for(let c=0; c<gameState.cols; c++) {
+                if(r===0 || r===gameState.rows-1 || c===0 || c===gameState.cols-1) grid[r][c]=1;
+                else grid[r][c] = 0;
+            }
+        }
+        grid[5][10] = 9;
+        gameState.mapGrid = grid;
+        gameState.playerPos = { x: 10, y: 15 }; 
+    },
+    draw: function() {
+        if (!this.ctx) return;
+        this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+        let sz = gameState.gridSize;
+        
+        let offsetX = this.canvas.width/2 - gameState.playerPos.x * sz - sz/2;
+        let offsetY = this.canvas.height/2 - gameState.playerPos.y * sz - sz/2;
+
+        for(let r=0; r<gameState.rows; r++) {
+            for(let c=0; c<gameState.cols; c++) {
+                let type = gameState.mapGrid[r][c];
+                let x = c * sz + offsetX;
+                let y = r * sz + offsetY;
+
+                if (type === 1) {
+                    this.ctx.fillStyle = '#7f8c8d'; 
+                } else if (type === 0) {
+                    this.ctx.fillStyle = gameState.isVillage ? '#34495e' : '#27ae60';
+                } else if (type === 2 || type === 3 || type === 4) {
+                    this.ctx.fillStyle = '#e67e22'; 
+                } else if (type === 5 || type === 6 || type === 7) {
+                    this.ctx.fillStyle = '#9b59b6'; 
+                } else if (type === 8) {
+                    this.ctx.fillStyle = '#d35400'; 
+                } else if (type === 9) {
+                    this.ctx.fillStyle = '#f1c40f'; 
+                }
+
+                this.ctx.fillRect(x, y, sz-1, sz-1);
+                
+                this.ctx.fillStyle = '#fff';
+                this.ctx.font = '9px sans-serif';
+                if(type === 2) this.ctx.fillText('雷靈', x+6, y+20);
+                if(type === 3) this.ctx.fillText('風靈', x+6, y+20);
+                if(type === 4) this.ctx.fillText('危！', x+6, y+20);
+                if(type === 5 && !gameState.items.thunderFan) this.ctx.fillText('雷幡', x+6, y+20);
+                if(type === 6 && !gameState.items.wind扇) this.ctx.fillText('風扇', x+6, y+20);
+                if(type === 7 && !gameState.items.rain傘) this.ctx.fillText('雨傘', x+6, y+20);
+                if(type === 8) this.ctx.fillText('BOSS', x+4, y+20);
+                if(type === 9) {
+                    this.ctx.fillStyle = '#000';
+                    this.ctx.font = 'bold 10px sans-serif';
+                    this.ctx.fillText('長老', x+6, y+20);
+                }
+            }
+        }
+
+        let px = gameState.playerPos.x * sz + offsetX;
+        let py = gameState.playerPos.y * sz + offsetY;
+        this.ctx.fillStyle = '#f1c40f';
+        this.ctx.beginPath();
+        this.ctx.arc(px + sz/2, py + sz/2, sz/2.5, 0, Math.PI*2);
+        this.ctx.fill();
+        
+        this.ctx.fillStyle = '#000';
+        this.ctx.font = 'bold 10px sans-serif';
+        this.ctx.fillText('三人', px+6, py+20);
+    },
+    movePlayer: function(dx, dy) {
+        if (gameState.currentScreen !== 'map' || document.getElementById('dialogue-overlay').style.display === 'flex') return;
+        
+        let newX = gameState.playerPos.x + dx;
+        let newY = gameState.playerPos.y + dy;
+        
+        if (newX >= 0 && newX < gameState.cols && newY >= 0 && newY < gameState.rows) {
+            let targetType = gameState.mapGrid[newY][newX];
+            if (targetType !== 1) { 
+                gameState.playerPos.x = newX;
+                gameState.playerPos.y = newY;
+                this.draw();
+                this.checkEvent(newX, newY, targetType);
+            }
+        }
+    },
+    checkEvent: function(x, y, type) {
+        if (type === 2) {
+            BattleSystem.initBattle('thunder_spirit');
+        }
+        else if (type === 3) {
+            if(gameState.storyProgress < 1) {
+                showToast("【提示】建議先往左上挑戰雷之祭壇，與雷丞完成基礎同調！");
+            }
+            BattleSystem.initBattle('wind_spirit');
+        }
+        else if (type === 4) {
+            if (gameState.storyProgress < 2) {
+                showToast("【結界反彈】中央通道魔物異常強大，雷丞與風晴必須先各自繼承祭壇之術！");
+            } else {
+                Dialogue.show(7, 9, function() {
+                    BattleSystem.initBattle('save_yuxuan');
+                });
+            }
+        }
+        else if (type === 5 && !gameState.items.thunderFan) BattleSystem.initBattle('item_thunder');
+        else if (type === 6 && !gameState.items.wind扇) BattleSystem.initBattle('item_wind');
+        else if (type === 7 && !gameState.items.rain傘) BattleSystem.initBattle('item_rain');
+        else if (type === 8) {
+            if (!gameState.items.thunderFan || !gameState.items.wind扇 || !gameState.items.rain傘) {
+                showToast("【聖物結界】必須在洞窟內集齊 雷之幡、風之扇、雨之傘，解除防禦！");
+            } else {
+                Dialogue.show(12, 12, function() {
+                    BattleSystem.initBattle('final_boss');
+                });
+            }
+        }
+        else if (type === 9) {
+            Dialogue.show(15, 16, function() {
+                setTimeout(() => { location.reload(); }, 3000);
+            });
+        }
+    }
+};
+
+// ==========================================
+// 4. 戰鬥系統核心 (新增隨機初始天氣、修正傷害計算 BUG、戰後自動半恢復)
+// ==========================================
+let battleState = { enemies: [], turnQueue: [], currentTurnIndex: 0, selectedAction: null, activeCaster: null };
+
+const BattleSystem = {
+    initBattle: function(type) {
+        Game.switchScreen('battle');
+        
+        // 核心修改 2：戰鬥開始時有一定機率 (40%) 隨機出現初始天氣，60% 為正常無天氣
+        let randWeather = Math.random();
+        if (randWeather < 0.40) {
+            let types = [WeatherType.SUNNY, WeatherType.RAINY, WeatherType.CLOUDY];
+            gameState.weather = types[Math.floor(Math.random() * types.length)];
+            gameState.weatherTurns = 3;
+            Game.updateWeatherDisplay();
+        } else {
+            gameState.weather = WeatherType.NONE; 
+            gameState.weatherTurns = 0;
+            Game.updateWeatherDisplay();
+        }
+        
+        gameState.party.forEach(p => p.buffs = {});
+
+        let logBox = document.getElementById('battle-log');
+        logBox.innerHTML = `<b>【戰鬥回合】點選下方行動，並選取施放目標！</b><br>`;
+        if (gameState.weather !== WeatherType.NONE) {
+            logBox.innerHTML += `<b style="color:#f1c40f;">【戰場大氣】突發初始天氣：${WeatherName[gameState.weather]}環境！</b><br>`;
+        }
+
+        if (type === 'thunder_spirit') {
+            battleState.enemies = [{ name: '狂暴雷獸影', hp: 280, maxHp: 280, atk: 32, def: 10, type: 'CLOUDY', isEnemy: true }];
+            logBox.innerHTML += "★ 雷之祭壇考驗：雷丞需展現意志！<br>";
+        } else if (type === 'wind_spirit') {
+            battleState.enemies = [{ name: '撕裂風靈影', hp: 300, maxHp: 300, atk: 28, def: 12, type: 'SUNNY', isEnemy: true }];
+            logBox.innerHTML += "★ 風之祭壇考驗：風晴需引導氣流！<br>";
+        } else if (type === 'save_yuxuan') {
+            battleState.enemies = [
+                { name: '試煉修羅A', hp: 220, maxHp: 220, atk: 25, def: 8, type: 'NONE', isEnemy: true },
+                { name: '試煉修羅B', hp: 220, maxHp: 220, atk: 25, def: 8, type: 'NONE', isEnemy: true }
+            ];
+            logBox.innerHTML += "💥 突圍戰：解救受困的雨漩大姊姊！<br>";
+        } else if (type === 'item_thunder') {
+            battleState.enemies = [{ name: '守幡雷鳴鬼', hp: 400, maxHp: 400, atk: 40, def: 15, type: 'CLOUDY', isEnemy: true }];
+        } else if (type === 'item_wind') {
+            battleState.enemies = [{ name: '守扇裂風鷹', hp: 380, maxHp: 380, atk: 38, def: 14, type: 'SUNNY', isEnemy: true }];
+        } else if (type === 'item_rain') {
+            battleState.enemies = [{ name: '守傘霧雨蛟', hp: 420, maxHp: 420, atk: 36, def: 18, type: 'RAINY', isEnemy: true }];
+        } else if (type === 'final_boss') {
+            battleState.enemies = [{ name: '終焉試煉魔神', hp: 1200, maxHp: 1200, atk: 55, def: 25, type: 'NONE', isEnemy: true }];
+            logBox.innerHTML += "⚡ 最終考驗：釋放全部天氣大招同調吧！<br>";
+        }
+
+        this.renderCombatants();
+        this.startTurnLoop();
+    },
+    renderCombatants: function() {
+        let enemyArea = document.getElementById('enemy-party');
+        enemyArea.innerHTML = '';
+        battleState.enemies.forEach((e, idx) => {
+            let hpPct = (e.hp / e.maxHp) * 100;
+            let deadClass = e.hp <= 0 ? 'dead' : '';
+            enemyArea.innerHTML += `
+                <div class="combatant-card ${deadClass}" id="enemy-${idx}" onclick="BattleSystem.selectTarget(${idx}, true)">
+                    <b>${e.name}</b><br> HP: ${e.hp}/${e.maxHp}
+                    <div class="hp-bar-bg"><div class="hp-bar-fill" style="width:${hpPct}%"></div></div>
+                </div>
+            `;
+        });
+
+        let playerArea = document.getElementById('player-party');
+        playerArea.innerHTML = '';
+        gameState.party.forEach((p, idx) => {
+            let hpPct = (p.hp / p.maxHp) * 100;
+            let mpPct = (p.mp / p.maxMp) * 100;
+            let deadClass = p.hp <= 0 ? 'dead' : '';
+            
+            let buffTag = '';
+            if(p.buffs.thunderTurns > 0) buffTag += `<span class="buff-badge">雷神(ATK↑)</span> `;
+            if(p.buffs.fogTurns > 0) buffTag += `<span class="buff-badge">霧隱(Msk↑)</span>`;
+
+            playerArea.innerHTML += `
+                <div class="combatant-card ${deadClass}" id="player-${idx}" onclick="BattleSystem.selectTarget(${idx}, false)">
+                    <b>${p.name}</b><br>
+                    HP: ${p.hp}/${p.maxHp}
+                    <div class="hp-bar-bg"><div class="hp-bar-fill" style="width:${hpPct}%"></div></div>
+                    MP: ${p.mp}/${p.maxMp}
+                    <div class="mp-bar-bg"><div class="mp-bar-fill" style="width:${mpPct}%"></div></div>
+                    ${buffTag}
+                </div>
+            `;
+        });
+    },
+    log: function(msg) {
+        let logBox = document.getElementById('battle-log');
+        logBox.innerHTML += msg + "<br>";
+        logBox.scrollTop = logBox.scrollHeight;
+    },
+    startTurnLoop: function() {
+        battleState.turnQueue = [];
+        gameState.party.forEach((p, i) => { if(p.hp > 0) battleState.turnQueue.push({isEnemy: false, index: i}); });
+        battleState.enemies.forEach((e, i) => { if(e.hp > 0) battleState.turnQueue.push({isEnemy: true, index: i}); });
+        battleState.currentTurnIndex = 0;
+        this.nextTurn();
+    },
+    nextTurn: function() {
+        if (battleState.enemies.every(e => e.hp <= 0)) { this.victory(); return; }
+        if (gameState.party.every(p => p.hp <= 0)) { this.defeat(); return; }
+
+        if (battleState.currentTurnIndex >= battleState.turnQueue.length) {
+            if (gameState.weatherTurns > 0) {
+                gameState.weatherTurns--;
+                if (gameState.weatherTurns === 0) {
+                    gameState.weather = WeatherType.NONE;
+                    this.log("<b>【環境】戰場天氣回復正常。</b>");
+                    Game.updateWeatherDisplay();
+                }
+            }
+            gameState.party.forEach(p => {
+                if (p.hp > 0) {
+                    if (p.buffs.thunderTurns > 0) p.buffs.thunderTurns--;
+                    if (p.buffs.fogTurns > 0) {
+                        p.buffs.fogTurns--;
+                        p.mp = Math.min(p.maxMp, p.mp + 5);
+                        this.log(`【霧隱精華】迷霧滋養了 【${p.name}】，自動回復 5 點 MP。`);
+                    }
+                }
+            });
+
+            this.startTurnLoop();
+            return;
+        }
+
+        document.querySelectorAll('.combatant-card').forEach(c => c.classList.remove('active-turn'));
+
+        let active = battleState.turnQueue[battleState.currentTurnIndex];
+        if (active.isEnemy) {
+            let enemy = battleState.enemies[active.index];
+            if (enemy.hp <= 0) { this.skipTurn(); return; }
+            document.getElementById(`enemy-${active.index}`).classList.add('active-turn');
+            setTimeout(() => { this.enemyAIAction(enemy); }, 1000);
+        } else {
+            let player = gameState.party[active.index];
+            if (player.hp <= 0) { this.skipTurn(); return; }
+            document.getElementById(`player-${active.index}`).classList.add('active-turn');
+            this.showPlayerMenu(player);
+        }
+    },
+    skipTurn: function() { battleState.currentTurnIndex++; this.nextTurn(); },
+    showPlayerMenu: function(character) {
+        document.getElementById('battle-menu-title').innerText = `輪到 【${character.name}】 指令`;
+        let menu = document.getElementById('battle-menu');
+        menu.innerHTML = '';
+
+        let atkBtn = document.createElement('button');
+        atkBtn.className = 'battle-btn';
+        atkBtn.innerText = '普通攻擊';
+        atkBtn.onclick = () => { this.selectAction({name: '普通攻擊', cost: 0, power: 15, target: 'enemy', type: 'NONE'}, character); };
+        menu.appendChild(atkBtn);
+
+        character.skills.forEach(skName => {
+            let sk = SkillDatabase[skName];
+            let btn = document.createElement('button');
+            btn.className = 'battle-btn';
+            btn.innerText = `${skName} (${sk.cost}M)`;
+            if (character.mp < sk.cost) btn.disabled = true;
+            btn.onclick = () => { this.selectAction(sk, character); };
+            menu.appendChild(btn);
+        });
+    },
+    selectAction: function(action, caster) {
+        battleState.selectedAction = action;
+        battleState.activeCaster = caster;
+
+        if (action.target === 'self') {
+            this.executeAction(caster); 
+        } else if (action.target === 'all_friends') {
+            this.executeAction(null);  
+        } else if (action.target === 'friend') {
+            showToast(`請點擊下方選擇我方一個「隊友目標」施展 【${action.name}】`, 'info');
+        } else {
+            showToast(`請點擊上方選擇「敵方目標」施展 【${action.name}】`, 'info');
+        }
+    },
+    selectTarget: function(targetIdx, isEnemyTarget) {
+        let action = battleState.selectedAction;
+        if (!action) return;
+
+        if (action.target === 'enemy' && !isEnemyTarget) return;
+        if (action.target === 'friend' && isEnemyTarget) return;
+
+        let target = isEnemyTarget ? battleState.enemies[targetIdx] : gameState.party[targetIdx];
+        if (target.hp <= 0) return;
+
+        this.executeAction(target);
+    },
+    executeAction: function(target) {
+        let caster = battleState.activeCaster;
+        let action = battleState.selectedAction;
+
+        caster.mp -= action.cost;
+
+        if (action.name === '電掣') {
+            caster.mp = Math.min(caster.maxMp, caster.mp + 20);
+            caster.buffs.thunderTurns = 2; 
+            this.log(`⚡【${caster.name}】發動【電掣】！自身回復了 20 MP，且攻擊力進入暴走增幅狀態！`);
+        } 
+        else if (action.name === '晴光') {
+            target.hp = Math.min(target.maxHp, target.hp + 50);
+            this.log(`☀️【${caster.name}】對【${target.name}】引導【晴光】，回復了 50 點生命值！`);
+        } 
+        else if (action.name === '霧隱') {
+            gameState.party.forEach(p => { if(p.hp > 0) p.buffs.fogTurns = 3; });
+            this.log(`🌫️【${caster.name}】輕揮法杖展開【霧隱】！全隊身形沒入白霧，迴避率飆升且緩緩回復法力！`);
+        } 
+        else {
+            let baseAtk = caster.atk;
+            if (caster.buffs.thunderTurns > 0) baseAtk *= 1.5; 
+
+            // 核心修改 2：修正天氣相性剋制與傷害錯置的計算 BUG
+            let damageMultiplier = 1.0;
+            if (gameState.weather !== WeatherType.NONE && action.type !== 'NONE') {
+                // 晴天：風系加成 (1.5)、雷系減少 (0.6)
+                if (gameState.weather === WeatherType.SUNNY) {
+                    if (action.type === 'SUNNY') { damageMultiplier = 1.5; this.log(`<b>【大氣共鳴】晴天助長風勢，威力提升！</b>`); }
+                    else if (action.type === 'CLOUDY') { damageMultiplier = 0.6; this.log(`<b>【大氣壓制】晴天烈日驅散雷雲，威力大減...</b>`); }
+                }
+                // 雨天：雨系加成 (1.5)、風系減少 (0.6)
+                else if (gameState.weather === WeatherType.RAINY) {
+                    if (action.type === 'RAINY') { damageMultiplier = 1.5; this.log(`<b>【大氣共鳴】雨天水乳交融，威力提升！</b>`); }
+                    else if (action.type === 'SUNNY') { damageMultiplier = 0.6; this.log(`<b>【大氣壓制】暴雨沉降氣流，風勢大減...</b>`); }
+                }
+                // 陰天：雷系加成 (1.5)、雨系減少 (0.6)
+                else if (gameState.weather === WeatherType.CLOUDY) {
+                    if (action.type === 'CLOUDY') { damageMultiplier = 1.5; this.log(`<b>【大氣共鳴】陰天陰雲密佈蓄電，威力提升！</b>`); }
+                    else if (action.type === 'RAINY') { damageMultiplier = 0.6; this.log(`<b>【大氣壓制】雷雲封鎖烏雲，雨勢大減...</b>`); }
+                }
+            }
+
+            // 先計算基礎淨傷害，再套用天氣乘積，確保數值絕對正確
+            let baseDmg = Math.max(5, (baseAtk + action.power) - target.def);
+            let dmg = Math.max(8, Math.floor(baseDmg * damageMultiplier));
+            
+            target.hp = Math.max(0, target.hp - dmg);
+            this.log(`【${caster.name}】使出 [${action.name}] 痛擊 【${target.name}】，造成 ${dmg} 點傷害！`);
+
+            if (action.changeWeather) {
+                gameState.weather = action.changeWeather;
+                gameState.weatherTurns = 3;
+                this.log(`<b>【天氣突變】傳承聖物發威！環境轉為：【${WeatherName[gameState.weather]}】(持續3回合)</b>`);
+                Game.updateWeatherDisplay();
+            }
+        }
+
+        battleState.selectedAction = null;
+        this.renderCombatants();
+        battleState.currentTurnIndex++;
+        setTimeout(() => { this.nextTurn(); }, 1200);
+    },
+    enemyAIAction: function(enemy) {
+        let alivePlayers = [];
+        gameState.party.forEach((p, idx) => { if(p.hp > 0) alivePlayers.push(idx); });
+        
+        if (alivePlayers.length > 0) {
+            let targetIdx = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+            let target = gameState.party[targetIdx];
+            
+            if (target.buffs.fogTurns > 0 && Math.random() < 0.5) {
+                this.log(`💨【霧隱閃避】【${enemy.name}】的猛烈撲擊被戰場迷霧干擾，空掉了！(Miss)`);
+            } else {
+                let dmg = Math.max(5, Math.floor(enemy.atk - target.def));
+                target.hp = Math.max(0, target.hp - dmg);
+                this.log(`💥【${enemy.name}】咆哮襲擊了 【${target.name}】，造成 ${dmg} 點物理創傷。`);
+            }
+        }
+
+        this.renderCombatants();
+        battleState.currentTurnIndex++;
+        setTimeout(() => { this.nextTurn(); }, 1200);
+    },
+    victory: function() {
+        this.log("<b>★ 戰鬥大獲全勝！ ★</b>");
+        
+        // 核心修改 1：每場戰鬥結束後，存活的角色自動恢復損失值的一半 HP 和 MP
+        gameState.party.forEach(p => {
+            if (p.hp > 0) {
+                let lostHp = p.maxHp - p.hp;
+                let lostMp = p.maxMp - p.mp;
+                let recoverHp = Math.floor(lostHp / 2);
+                let recoverMp = Math.floor(lostMp / 2);
+                p.hp += recoverHp;
+                p.mp += recoverMp;
+                this.log(`✨【戰後休整】${p.name} 自動恢復了 ${recoverHp} 點 HP 與 ${recoverMp} 點 MP (損失的一半)。`);
+            }
+        });
+
+        setTimeout(() => {
+            let activeBattle = battleState.enemies[0].name;
+
+            if (activeBattle.includes('雷獸影')) {
+                gameState.mapGrid[9][2] = 0; 
+                gameState.party[0].skills.push('電掣');
+                gameState.storyProgress = Math.max(1, gameState.storyProgress);
+                Game.switchScreen('map');
+                MapSystem.draw();
+                Dialogue.show(3, 4);
+            } 
+            else if (activeBattle.includes('風靈影')) {
+                gameState.mapGrid[9][18] = 0;
+                gameState.party[1].skills.push('晴光');
+                gameState.storyProgress = Math.max(2, gameState.storyProgress);
+                gameState.mapGrid[7][10] = 0; 
+                Game.switchScreen('map');
+                MapSystem.draw();
+                Dialogue.show(5, 6);
+            } 
+            else if (activeBattle.includes('修羅')) {
+                gameState.mapGrid[10][10] = 0;
+                gameState.storyProgress = 3;
+                gameState.party.push(JSON.parse(JSON.stringify(YuXuanTemplate))); 
+                Game.switchScreen('map');
+                MapSystem.draw();
+                Dialogue.show(10, 11);
+            } 
+            else if (activeBattle.includes('守幡')) {
+                gameState.items.thunderFan = true;
+                gameState.party[0].skills.push('鳴雷陣陣'); 
+                showToast("【傳承到手】取得了 [雷之幡]！雷丞習得了大招「鳴雷陣陣」！", "info");
+                Game.switchScreen('map'); MapSystem.draw();
+            }
+            else if (activeBattle.includes('守扇')) {
+                gameState.items.wind扇 = true;
+                gameState.party[1].skills.push('舞風揚揚'); 
+                showToast("【傳承到手】取得了 [風之扇]！風晴習得了大招「舞風揚揚」！", "info");
+                Game.switchScreen('map'); MapSystem.draw();
+            }
+            else if (activeBattle.includes('守傘')) {
+                gameState.items.rain傘 = true;
+                gameState.party[2].skills.push('落雨綿綿'); 
+                showToast("【傳承到手】取得了 [雨之傘]！雨漩習得了大招「落雨綿綿」！", "info");
+                Game.switchScreen('map'); MapSystem.draw();
+            }
+            else if (activeBattle.includes('魔神')) {
+                gameState.storyProgress = 4;
+                gameState.isVillage = true;
+                document.getElementById('location-text').innerText = "隱世秘境·宗門慶典城鎮";
+                
+                MapSystem.buildVillageMap(); 
+                Game.switchScreen('map');
+                MapSystem.draw();
+                
+                Dialogue.show(13, 14);
+            }
+        }, 1800);
+    },
+    defeat: function() {
+        this.log("全軍覆沒... 請重新調整戰術再度挑戰！");
+        setTimeout(() => {
+            gameState.party.forEach(p => { p.hp = p.maxHp; p.mp = p.maxMp; });
+            Game.switchScreen('map');
+            MapSystem.draw();
+        }, 2000);
+    }
+};
+
+// ==========================================
+// 5. 虛擬搖桿與操作輸入系統
+// ==========================================
+const InputSystem = {
+    init: function() {
+        let zone = document.getElementById('joystick-zone');
+        let stick = document.getElementById('joystick-stick');
+        let isDragging = false;
+        let startX, startY;
+
+        const startDrag = (e) => {
+            isDragging = true;
+            let pageX = e.touches ? e.touches[0].pageX : e.pageX;
+            let pageY = e.touches ? e.touches[0].pageY : e.pageY;
+            startX = pageX; startY = pageY;
+        };
+        const moveDrag = (e) => {
+            if (!isDragging) return;
+            let pageX = e.touches ? e.touches[0].pageX : e.pageX;
+            let pageY = e.touches ? e.touches[0].pageY : e.pageY;
+            let dx = pageX - startX; let dy = pageY - startY;
+            let distance = Math.min(40, Math.sqrt(dx*dx + dy*dy));
+            let angle = Math.atan2(dy, dx);
+            stick.style.transform = `translate(${Math.cos(angle)*distance}px, ${Math.sin(angle)*distance}px)`;
+        };
+        const endDrag = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            let trans = stick.style.transform;
+            stick.style.transform = `translate(0px, 0px)`;
+            let matches = trans.match(/translate\((.+)px,\s*(.+)px\)/);
+            if (matches) {
+                let mx = parseFloat(matches[1]); let my = parseFloat(matches[2]);
+                if (Math.abs(mx) > 12 || Math.abs(my) > 12) {
+                    if (Math.abs(mx) > Math.abs(my)) MapSystem.movePlayer(mx > 0 ? 1 : -1, 0);
+                    else MapSystem.movePlayer(0, my > 0 ? 1 : -1);
+                }
+            }
+        };
+
+        zone.addEventListener('touchstart', startDrag);
+        window.addEventListener('touchmove', moveDrag);
+        window.addEventListener('touchend', endDrag);
+        zone.addEventListener('mousedown', startDrag);
+        window.addEventListener('mousemove', moveDrag);
+        window.addEventListener('mouseup', endDrag);
+        
+        window.addEventListener('keydown', (e) => {
+            let key = e.key.toLowerCase();
+            if (gameState.currentScreen === 'map' && document.getElementById('dialogue-overlay').style.display !== 'flex') {
+                if (key === 'arrowup' || key === 'w') MapSystem.movePlayer(0, -1);
+                if (key === 'arrowdown' || key === 's') MapSystem.movePlayer(0, 1);
+                if (key === 'arrowleft' || key === 'a') MapSystem.movePlayer(-1, 0);
+                if (key === 'arrowright' || key === 'd') MapSystem.movePlayer(1, 0);
+            }
+            if (document.getElementById('dialogue-overlay').style.display === 'flex') {
+                if (e.key === ' ' || key === 'enter') { e.preventDefault(); Dialogue.next(); }
+            }
+        });
+    }
+};
+
+// ==========================================
+// 6. 頂層頂級控制模組
+// ==========================================
+const Game = {
+    init: function() {
+        MapSystem.init();
+        InputSystem.init();
+        setTimeout(() => { MapSystem.resize(); MapSystem.draw(); }, 150);
+        window.addEventListener('resize', () => { MapSystem.resize(); MapSystem.draw(); });
+    },
+    start: function() {
+        this.switchScreen('map');
+        MapSystem.resize();
+        MapSystem.draw();
+        Dialogue.show(0, 2);
+    },
+    switchScreen: function(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(`${screenId}-screen`).classList.add('active');
+        gameState.currentScreen = screenId;
+    },
+    updateWeatherDisplay: function() {
+        let el = document.getElementById('weather-display');
+        el.className = `weather-badge weather-${gameState.weather}`;
+        el.innerText = WeatherName[gameState.weather];
+    },
+    openMenu: function() {
+        let info = gameState.party.map(p => 
+            `【${p.name}】\n・狀態: ${p.class}\n・HP: ${p.hp}/${p.maxHp} | MP: ${p.mp}/${p.maxMp}\n・已知技能: ${p.skills.join(', ')}`
+        ).join('\n\n');
+        
+        info += `\n\n--- 當前行囊聖物 ---\n`;
+        info += `・雷之幡: ${gameState.items.thunderFan ? '已取得(雷丞大招解鎖)' : '未取得'}\n`;
+        info += `・風之扇: ${gameState.items.wind扇 ? '已取得(風晴大招解鎖)' : '未取得'}\n`;
+        info += `・雨之傘: ${gameState.items.rain傘 ? '已取得(雨漩大招解鎖)' : '未取得'}\n`;
+
+        document.getElementById('menu-content-box').innerText = info;
+        document.getElementById('menu-overlay').style.display = 'flex';
+    },
+    closeMenu: function() { document.getElementById('menu-overlay').style.display = 'none'; }
+};
+
+window.onload = function() { Game.init(); };
+</script>
+
+</body>
+</html>
