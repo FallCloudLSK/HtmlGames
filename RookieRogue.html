@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>骰子肉鴿：轉職吧！菜雞 (終極策略版)</title>
+    <title>骰子肉鴿：轉職吧！菜雞 (大成功被動版)</title>
     <style>
         :root {
             --primary: #ffb703;
@@ -13,6 +13,7 @@
             --danger: #e63946;
             --success: #2a9d8f;
             --magic: #8a2be2;
+            --undead: #3a506b;
             
             --c-normal: #adb5bd;
             --c-elite: #f4a261;
@@ -51,7 +52,6 @@
             position: relative;
         }
 
-        /* 頂部橫條：大頭照 + 狀態 */
         .top-bar {
             display: flex;
             align-items: center;
@@ -60,6 +60,18 @@
             padding: 8px 15px;
             border-radius: 8px;
             border: 2px solid var(--primary);
+        }
+
+        /* 死雞外觀 */
+        .top-bar.undead-mode {
+            background: #d1d5db;
+            border-color: var(--undead);
+        }
+        .top-bar.undead-mode .chicken-avatar {
+            background: #6b7280;
+        }
+        .top-bar.undead-mode .chicken-avatar::before {
+            background: #ef4444; box-shadow: 18px 0 0 #ef4444;
         }
 
         .chicken-avatar {
@@ -98,7 +110,6 @@
         .status-node { display: flex; flex-direction: column; }
         .status-node span:last-child { color: var(--secondary); font-size: 1.05rem; }
 
-        /* 右上角規則說明按鈕 */
         .rule-btn {
             background: var(--dark);
             color: white;
@@ -111,7 +122,6 @@
         }
         .rule-btn:hover { background: #444; }
 
-        /* 裝備展示欄 */
         .equip-panel {
             background: #f8f9fa;
             border: 1px solid #ddd;
@@ -136,7 +146,6 @@
         }
         .face-box.header { background: #e9ecef; border-color: #bbb; color: #666; }
 
-        /* 策略橫排地圖 */
         .map-wrapper {
             background: #f1f3f5; padding: 8px; border-radius: 8px;
         }
@@ -149,7 +158,6 @@
         }
         .map-cell.current { border: 2px solid #000; box-shadow: inset 0 0 5px #000; }
 
-        /* 中間核心操作與對決區 */
         .main-gamearea { display: flex; gap: 15px; flex-grow: 1; min-height: 0; }
         .interaction-box {
             width: 60%; border: 2px solid #dee2e6; border-radius: 8px; padding: 12px;
@@ -160,16 +168,25 @@
             padding: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
 
-        /* 骰子區 */
         .dice-area-title { font-size: 0.95rem; font-weight: bold; color: #333; margin: 0 0 5px 0; }
-        .dice-container { display: flex; gap: 15px; margin-bottom: 10px; }
+        .dice-container { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
         .dice {
             width: 55px; height: 55px; background: white; border: 3px solid var(--dark); border-radius: 8px;
             display: flex; justify-content: center; align-items: center; font-size: 1.8rem; font-weight: bold;
-            cursor: pointer; box-shadow: 0 3px 5px rgba(0,0,0,0.1); user-select: none;
+            cursor: pointer; box-shadow: 0 3px 5px rgba(0,0,0,0.1); user-select: none; position: relative;
         }
         .dice:hover { background: #fff3cd; }
         .dice.rolling { animation: shake 0.4s infinite; background: #ced4da; }
+
+        /* 黃金骰子樣式 */
+        .dice.gold-dice {
+            background: #ffd700; border-color: #d4af37; color: #fff;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .dice.gold-dice:hover { background: #ffea00; }
+        .gold-cost-tag {
+            position: absolute; bottom: -18px; font-size: 0.65rem; color: #fb8500; font-weight: bold; width: 100%; text-align: center;
+        }
 
         @keyframes shake {
             0% { transform: translate(1px, 1px) rotate(0deg); }
@@ -180,7 +197,6 @@
             100% { transform: translate(1px, 1px) rotate(1deg); }
         }
 
-        /* 戰鬥與日誌 */
         .battle-view { width: 100%; }
         .unit-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
         .unit-box { width: 48%; padding: 6px; border-radius: 6px; background: #f8f9fa; border: 1px solid #ccc; text-align: center; font-size: 0.85rem;}
@@ -189,7 +205,6 @@
             font-family: monospace; border-radius: 5px; font-size: 0.8rem; text-align: left; flex-grow: 1; margin-top: 5px;
         }
 
-        /* 商店網格與售出遮罩 */
         .shop-grid, .job-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
         .shop-item {
             border: 1px solid #ccc; padding: 6px; border-radius: 6px; background: #fff; font-size: 0.8rem;
@@ -212,7 +227,6 @@
         .btn:hover { background: #d97200; }
         .btn:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* 說明彈窗 */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;
@@ -229,7 +243,7 @@
 <div id="game-container">
     
     <!-- 1. 頂部狀態欄 -->
-    <div class="top-bar">
+    <div id="main-topbar" class="top-bar">
         <div class="chicken-avatar"><div class="comb"></div></div>
         <div class="status-grid">
             <div class="status-node"><span>職業</span><span id="stat-job">菜雞</span></div>
@@ -240,7 +254,7 @@
             <div class="status-node"><span>基礎速度</span><span id="stat-spd">2</span></div>
             <div class="status-node"><span>金幣</span><span id="stat-gold">$40</span></div>
         </div>
-        <button class="rule-btn" onclick="openModal()">📜 規則與職業</button>
+        <button class="rule-btn" onclick="openModal()">📜 規則與天賦</button>
     </div>
 
     <!-- 2. 我方裝備欄位 -->
@@ -279,7 +293,8 @@
                 <h4 style="margin:0 0 5px 0; color:var(--secondary)">🧭 冒險日誌</h4>
                 <p id="move-msg" style="font-size:0.9rem; margin:5px 0;">點擊右側骰子開始前進！</p>
                 <div id="event-action" style="display:none; margin-top:10px;">
-                    <button class="btn" onclick="triggerEventEffect()">執行/調查事件</button>
+                    <button class="btn" id="event-btn-confirm" onclick="triggerEventEffect()">執行/調查事件</button>
+                    <button class="btn" id="event-btn-skip" style="background:#6c757d; display:none;" onclick="exitEvent()">避開祭壇</button>
                 </div>
             </div>
 
@@ -305,7 +320,7 @@
             <div id="box-shop" class="sub-view" style="display: none;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                     <h4 style="margin:0; color:var(--c-shop)">🏪 咕咕雞便利商店</h4>
-                    <button class="btn" id="refresh-shop-btn" style="background:var(--magic); padding:3px 8px; font-size:0.75rem; display:none;" onclick="refreshShop()">🔄 嘴砲刷新 (金幣 $10)</button>
+                    <button class="btn" id="refresh-shop-btn" style="background:var(--magic); padding:3px 8px; font-size:0.75rem;" onclick="refreshShop()">🔄 更新商品 (金幣 $5)</button>
                 </div>
                 <div class="shop-grid" id="shop-items-container"></div>
                 <button class="btn" style="margin-top:8px; width:100%;" onclick="exitShop()">離開商店</button>
@@ -317,11 +332,15 @@
                 <div class="job-grid" id="job-container"></div>
             </div>
 
-            <!-- 結算場景 -->
+            <!-- 契約/結算場景 -->
             <div id="box-over" class="sub-view" style="display: none; text-align: center;">
                 <h3 id="over-title">遊戲結束</h3>
                 <p id="over-msg" style="font-size:0.9rem;"></p>
-                <button class="btn" onclick="location.reload()">重新開局</button>
+                <div id="contract-actions" style="display:none; gap:10px; justify-content:center; margin-top:15px;">
+                    <button class="btn" style="background:var(--undead); font-weight:bold;" onclick="signUndeadContract()">🔮 接受契約（轉職為死雞）</button>
+                    <button class="btn" style="background:#6c757d;" onclick="restartGame()">❌ 重新開局</button>
+                </div>
+                <button id="restart-only-btn" class="btn" style="display:none;" onclick="restartGame()">重新開局</button>
             </div>
 
             <div class="log-box" id="game-log">冒險啟程...準備甩起你的骰子吧！</div>
@@ -330,62 +349,64 @@
         <!-- 右側：固定骰子操作控制台 -->
         <div class="side-control-box">
             <p class="dice-area-title" id="dice-title">請選擇骰子前進：</p>
-            <div class="dice-container">
+            <div class="dice-container" id="dice-container-box">
                 <div class="dice" id="dice-0" onclick="chooseDice(0)">1</div>
                 <div class="dice" id="dice-1" onclick="chooseDice(1)">3</div>
                 <div class="dice" id="dice-2" onclick="chooseDice(2)">5</div>
+                <!-- 土豪特有黃金骰子 -->
+                <div class="dice gold-dice" id="dice-gold" style="display:none;" onclick="chooseDice('gold')">6<div class="gold-cost-tag">$6</div></div>
             </div>
-            <div style="font-size:0.75rem; color:#666; text-align:center; padding:0 5px;">
+            <div id="dice-desc-text" style="font-size:0.75rem; color:#666; text-align:center; padding:5px 5px 0 5px;">
                 點擊骰子觸發行動，該骰子會自動滾動重骰。
             </div>
         </div>
     </div>
 </div>
 
-<!-- 5. 說明規則彈窗 -->
+<!-- 說明規則彈窗 -->
 <div id="rule-modal" class="modal">
     <div class="modal-content">
         <span class="close-btn" onclick="closeModal()">&times;</span>
-        <h3>📜 遊戲規則與進階轉職說明</h3>
+        <h3>📜 遊戲規則與職業被動說明</h3>
         <hr>
         <h4>基本核心規則：</h4>
         <ul>
             <li><b>數值特化</b>：本版大幅調低了基礎血量與基礎攻擊，<b>此時裝備的「骰面數值點數」將會成為主導勝負的核心！</b></li>
-            <li><b>強制攔截機制</b>：地圖長度 150 格。每 30 格（30, 60, 90, 120）的<b>章節頭目屬於強力結界，即使你骰出的點數超過它，也會被強制停留在該格並直接觸發對戰</b>。打贏後才能再次出發。</li>
-            <li><b>回合制攻防機制</b>：
-                <ul>
-                    <li>進攻回合：選擇骰子，只觸發<b>武器骰面</b>疊加傷害。</li>
-                    <li>防守回合：敵方亮出本輪預估傷害，此時你再手動選擇骰子，以<b>防具骰面</b>進行格擋抵消。</li>
-                    <li>魔法書武器：如果裝備法杖/法典，傷害將依照<b>基礎魔法+武器骰面</b>計算，且直接<b>無視敵方防禦力</b>。</li>
-                </ul>
-            </li>
+            <li><b>魔法武器強化</b>：法杖/法典類武器骰面獲得全盤提升，傷害依照<b>基礎魔法+武器骰面</b>計算，且直接<b>無視敵方防禦力</b>。</li>
+            <li><b>強制攔截機制</b>：每 30 格的<b>章節頭目屬於強力結界，即使你骰出的點數超過它，也會被強制停留在該格並直接觸發對戰</b>。</li>
+            <li><b>商店更新</b>：所有人均可使用金幣更新商店商品，第一次 5 金幣，後續每次調漲 5 金幣。購買後只會置灰買下的商品，其餘保留。</li>
         </ul>
-        <h4>✨ 6種進階職業轉職條件：</h4>
+        <h4>✨ 職業獨特天賦/被動能力：</h4>
         <ul>
-            <li><b>肉雞</b>：基礎最大生命值達到 <b>45</b> 以上可轉職。 (覺醒獎勵：最大生命+40, 攻擊+1)</li>
-            <li><b>鬥雞</b>：基礎攻擊力達到 <b>6</b> 以上可轉職。 (覺醒獎勵：攻擊+4, 速度+2)</li>
-            <li><b>咕雞</b>：基礎魔法值達到 <b>3</b> 以上可轉職。 (覺醒獎勵：魔法+4, 最大生命+10)</li>
-            <li><b>飛雞</b>：基礎速度達到 <b>6</b> 以上可轉職。 (覺醒獎勵：速度+4, 攻擊+1)</li>
-            <li><b>金雞</b>：身上持有的金幣達到 <b>$80</b> 以上可轉職。 (覺醒獎勵：攻擊+2, 魔法+2, 速度+2)</li>
-            <li><b>話嘮雞 (特別新職業)</b>：等級達到 <b>3 級</b> 以上即可轉職。
-                <br><span style="color:var(--magic)"><b>職業特殊天賦</b>：能在商店開啟「更新商品」的口才按鈕。初始需 10 金幣，每次刷新後會因為老闆被煩到而提高 5 金幣消耗。</span>
+            <li><b>菜雞【學習】</b>：移動時，依照甩出的骰子點數，即時獲得 <b>1/1/1/2/2/3</b> 點經驗值。</li>
+            <li><b>肉雞【食補】</b>：防禦回合，<b>若手動選中「骰面為6」的骰子，觸發黃字特效，額外恢復 10% 最大生命值</b>。</li>
+            <li><b>鬥雞【暴擊】</b>：攻擊回合，<b>若骰出「骰面為6」，觸發紅字特效，該次總傷害暴擊變為 1.5 倍</b>。</li>
+            <li><b>咕雞【震擊】</b>：攻擊回合，<b>若骰出「骰面為6」，觸發藍字特效，直接讓敵方暈眩，強制跳過其下一輪進攻</b>。</li>
+            <li><b>飛雞【反擊】</b>：防禦回合，<b>若選中「骰面為6」的骰子，觸發綠字特效，完成絕對閃避，該回合受傷歸零</b>。</li>
+            <li><b>金雞【土豪】</b>：右側操作台永久多出一顆<b>「固定為6點」的黃金骰子</b>，但每次點選使用均需<b>扣除 6 金幣</b>。</li>
+            <li><b>死雞【亡靈（終極代價職業）】</b>：
+                <ul>
+                    <li><b>轉職條件</b>：玩家戰陣亡時，若等級大於 2 級，可簽下靈魂契約轉職（MaxHP+20, 攻+3, 魔+3, 速-2）。</li>
+                    <li><b>被動</b>：戰鬥勝利時<b>恢復 10% 最大生命值</b>。</li>
+                    <li><b>代價</b>：死雞無法再轉職成其他職業。此外，<b>在地圖遇到「隨機事件：朝聖祭壇」時，將無法受洗，只能被迫選「避開」而無法恢復生命</b>。再次死亡遊戲直接結束。</li>
+                </ul>
             </li>
         </ul>
     </div>
 </div>
 
 <script>
-// --- 資料庫定義（攻防下修、契合骰子比重） ---
+// --- 資料庫定義（魔法武器數值調升+1~+2） ---
 const WEAPONS = [
     { id:"w1", name: "木劍", cost: 0, dice: [1,1,2,2,2,3], desc: "破爛木頭", tier: "初" },
     { id:"w2", name: "鐵劍", cost: 15, dice: [1,2,2,3,3,4], desc: "沉穩堅固", tier: "初" },
-    { id:"w3", name: "木柄小法杖", cost: 20, dice: [1,1,1,2,2,2], desc: "【魔法書】無視防禦", isMagic: true, tier: "初" },
+    { id:"w3", name: "木柄小法杖", cost: 20, dice: [2,2,3,3,4,4], desc: "【魔法書】無視防禦 (增強版)", isMagic: true, tier: "初" },
     { id:"w4", name: "賭徒小刀", cost: 25, dice: [1,1,1,1,1,9], desc: "極限一擊", tier: "初" },
     { id:"w5", name: "精鋼長劍", cost: 45, dice: [2,3,3,4,4,6], desc: "主力利刃", tier: "中" },
     { id:"w6", name: "逆刃刀", cost: 50, dice: [8,6,4,3,2,1], desc: "骰出1點時威力極大！", tier: "中" },
-    { id:"w7", name: "元素法典", cost: 55, dice: [2,2,3,3,4,5], desc: "【魔法書】元素奧秘", isMagic: true, tier: "中" },
+    { id:"w7", name: "元素法典", cost: 55, dice: [3,4,4,5,5,7], desc: "【魔法書】元素奧秘 (增強版)", isMagic: true, tier: "中" },
     { id:"w8", name: "屠龍大寶劍", cost: 95, dice: [4,5,6,7,8,12], desc: "重型巨劍", tier: "後" },
-    { id:"w9", name: "大天使之杖", cost: 105, dice: [4,4,5,6,7,9], desc: "【魔法書】神聖裁決", isMagic: true, tier: "後" },
+    { id:"w9", name: "大天使之杖", cost: 105, dice: [5,6,6,7,8,11], desc: "【魔法書】神聖裁決 (增強版)", isMagic: true, tier: "後" },
     { id:"w10", name: "命運神之刃", cost: 120, dice: [1,1,1,7,7,20], desc: "命運雙刃劍", tier: "後" }
 ];
 
@@ -416,15 +437,13 @@ const ACCESSORIES = [
 ];
 
 const JOBS = [
-    { id: "meat", name: "肉雞", req: "生命達45", check: (p) => p.maxHp >= 45, bonus: { maxHp: 40, atk: 1 }, desc: "血厚肉盾！MaxHP+40, 攻擊+1" },
-    { id: "fighter", name: "鬥雞", req: "攻擊達6", check: (p) => p.atk >= 6, bonus: { atk: 4, spd: 2 }, desc: "特化肉搏！攻擊+4, 速度+2" },
-    { id: "mage", name: "咕雞", req: "魔法達3", check: (p) => p.matk >= 3, bonus: { matk: 4, maxHp: 10 }, desc: "奧術轟炸！魔法+4, 生命+10" },
-    { id: "swift", name: "飛雞", req: "速度達6", check: (p) => p.spd >= 6, bonus: { spd: 4, atk: 1 }, desc: "迅捷無比！速度+4, 攻擊+1" },
-    { id: "rich", name: "金雞", req: "擁有金幣$80", check: (p) => p.gold >= 80, bonus: { atk: 2, matk: 2, spd: 2 }, desc: "金錢萬能！全屬性大幅提升" },
-    { id: "talker", name: "話嘮雞", req: "等級達到3級", check: (p) => p.level >= 3, bonus: { maxHp: 15, spd: 2 }, desc: "動嘴大師！可在商店用金幣刷新商品！" }
+    { id: "meat", name: "肉雞", req: "生命達45", check: (p) => p.maxHp >= 45, bonus: { maxHp: 40, atk: 1 }, desc: "血厚肉盾！【食補】防禦選中6點骰面時，恢復10%生命值" },
+    { id: "fighter", name: "鬥雞", req: "攻擊達6", check: (p) => p.atk >= 6, bonus: { atk: 4, spd: 2 }, desc: "狂暴肉搏！【暴擊】攻擊出6點時，本次傷害變為1.5倍" },
+    { id: "mage", name: "咕雞", req: "魔法達3", check: (p) => p.matk >= 3, bonus: { matk: 4, maxHp: 10 }, desc: "奧術轟炸！【震擊】攻擊出6點時，強制使敵方下輪暈眩跳過" },
+    { id: "swift", name: "飛雞", req: "速度達6", check: (p) => p.spd >= 6, bonus: { spd: 4, atk: 1 }, desc: "迅捷殘影！【反擊】防禦選中6點骰面時，觸發完美絕對閃避" },
+    { id: "rich", name: "金雞", req: "擁有金幣$80", check: (p) => p.gold >= 80, bonus: { atk: 2, matk: 2, spd: 2 }, desc: "萬能土豪！【土豪】多出一顆固定為6點的黃金骰，每次點選扣6元" }
 ];
 
-// 下修怪物基礎，讓骰子比重大增
 const MONSTERS = {
     normal: [{ name: "小毛蟲", hp: 14, atk: 2, def: 0, exp: 3, gold: 12 }, { name: "野豬仔", hp: 18, atk: 3, def: 1, exp: 4, gold: 15 }],
     elite: [{ name: "精英瘋牛", hp: 32, atk: 5, def: 2, exp: 10, gold: 25 }, { name: "劇毒蜘蛛", hp: 28, atk: 7, def: 1, exp: 10, gold: 28 }],
@@ -432,9 +451,9 @@ const MONSTERS = {
     demon: [{ name: "【終極大魔王】千層邪神雞", hp: 120, atk: 15, def: 5, exp: 0, gold: 0 }]
 };
 
-// --- 遊戲狀態管理 ---
+// --- 狀態控制 ---
 let player = {
-    job: "菜雞", hasChangedJob: false, level: 1, exp: 0, maxHp: 35, hp: 35, atk: 2, matk: 0, spd: 2, gold: 40, pos: 0,
+    job: "菜雞", hasChangedJob: false, isUndead: false, level: 1, exp: 0, maxHp: 35, hp: 35, atk: 2, matk: 0, spd: 2, gold: 40, pos: 0,
     weapon: WEAPONS[0], armor: ARMORS[0], accessory: null
 };
 
@@ -443,12 +462,12 @@ let gameState = "MOVE";
 let battleData = null;
 let currentEventEffect = null;
 
-// 儲存目前商店販賣的原始陣列與售出狀況
 let currentShopItems = [];
-let refreshCost = 10;
+let refreshCost = 5; // 調整：初始降低為5元
 
 let mapCellsType = [];
 function generateGlobalMap() {
+    mapCellsType = [];
     for(let i=0; i<=150; i++) {
         if(i===0) mapCellsType.push("起點");
         else if(i===150) mapCellsType.push("大魔王");
@@ -475,7 +494,7 @@ function updateUI() {
     document.getElementById("stat-spd").innerText = player.spd + (player.accessory?.effect?.spd || 0);
     document.getElementById("stat-gold").innerText = `$${player.gold}`;
 
-    // 1x6 裝備格圖形
+    // 換裝格繪製
     document.getElementById("eq-wp-name").innerText = `⚔️ 武器: ${player.weapon.name} ${player.weapon.isMagic?'(魔)':''}`;
     let wpDom = "";
     for(let i=0; i<6; i++) wpDom += `<div class="face-box" style="background:#fff0f0;">${player.weapon.dice[i]}</div>`;
@@ -492,13 +511,21 @@ function updateUI() {
         document.getElementById(`dice-${i}`).innerText = currentDice[i];
     }
 
-    // 根據職業是否顯示刷新按鈕
-    if(player.job === "話嘮雞") {
-        document.getElementById("refresh-shop-btn").style.display = "inline-block";
-        document.getElementById("refresh-shop-btn").innerText = `🔄 嘴砲刷新 (金幣 $${refreshCost})`;
+    // 金雞特權：黃金骰子顯示控制
+    if(player.job === "金雞") {
+        document.getElementById("dice-gold").style.display = "flex";
     } else {
-        document.getElementById("refresh-shop-btn").style.display = "none";
+        document.getElementById("dice-gold").style.display = "none";
     }
+
+    // 死雞特殊外觀頂條
+    if(player.isUndead) {
+        document.getElementById("main-topbar").classList.add("undead-mode");
+    } else {
+        document.getElementById("main-topbar").classList.remove("undead-mode");
+    }
+
+    document.getElementById("refresh-shop-btn").innerText = `🔄 更新商品 (金幣 $${refreshCost})`;
 
     renderStrategyMap();
 }
@@ -543,6 +570,11 @@ function logGame(msg) {
 }
 
 function animateAndRollDice(index, callback) {
+    if(index === 'gold') {
+        // 黃金骰子點數固定為6，不需要滾動
+        if(callback) callback();
+        return;
+    }
     let diceEl = document.getElementById(`dice-${index}`);
     diceEl.classList.add("rolling");
     let counter = 0;
@@ -559,15 +591,26 @@ function animateAndRollDice(index, callback) {
     }, 60);
 }
 
-// --- 移動與強制攔截機制 ---
+// --- 核心決策分配器 ---
 function chooseDice(index) {
+    let diceValue = (index === 'gold') ? 6 : currentDice[index];
+
+    // 如果點選黃金骰子，需扣除金幣
+    if(index === 'gold') {
+        if(player.gold < 6) {
+            alert("金幣不足 $6，無法召喚黃金骰子！");
+            return;
+        }
+        player.gold -= 6;
+        updateUI();
+        logGame(`💰 【土豪】花費 $6 金幣指定使用 6 點黃金骰！`);
+    }
+
     if (gameState === "MOVE") {
-        let steps = currentDice[index];
         let oldPos = player.pos;
-        let wantedPos = player.pos + steps;
+        let wantedPos = player.pos + diceValue;
         let intercepted = false;
 
-        // 核心修改：每30格檢查有無卡住強制頭目
         for(let p = oldPos + 1; p <= wantedPos; p++) {
             if(p % 30 === 0 || p === 150) {
                 player.pos = p;
@@ -575,18 +618,24 @@ function chooseDice(index) {
                 break;
             }
         }
-
-        if(!intercepted) {
-            player.pos = wantedPos;
-        }
+        if(!intercepted) player.pos = wantedPos;
         if (player.pos > 150) player.pos = 150;
         
+        // 菜雞被動能力：學習
+        if(player.job === "菜雞") {
+            let expBonusArr = [0, 1, 1, 1, 2, 2, 3]; // 對應點數 1~6
+            let earnedExp = expBonusArr[diceValue] || 1;
+            player.exp += earnedExp;
+            logGame(`🐥 【學習】菜雞靈光一閃，額外獲得 +${earnedExp} 經驗值！`);
+            checkLevelUp();
+        }
+
         if(intercepted) {
-            document.getElementById("move-msg").innerText = `你本想前進 ${steps} 格，但在第 ${player.pos} 格被章節頭目強制拦截阻擋！`;
+            document.getElementById("move-msg").innerText = `你本想前進 ${diceValue} 格，但在第 ${player.pos} 格被章節頭目強制攔截阻擋！`;
             logGame(`🚨 強制攔截！無法越過第 ${player.pos} 格的關卡頭目屏障！`);
         } else {
-            document.getElementById("move-msg").innerText = `你選擇了 [ ${steps} ] 點，向前進了 ${steps} 格。`;
-            logGame(`👣 前進了 ${steps} 格，移動至第 ${player.pos} 格。`);
+            document.getElementById("move-msg").innerText = `你選擇了 [ ${diceValue} ] 點，向前進了 ${diceValue} 格。`;
+            logGame(`👣 前進了 ${diceValue} 格，移動至第 ${player.pos} 格。`);
         }
         
         animateAndRollDice(index, () => {
@@ -594,14 +643,13 @@ function chooseDice(index) {
         });
     } 
     else if (gameState === "BATTLE_INIT") {
-        let pDice = currentDice[index];
         let pSpd = player.spd + (player.accessory?.effect?.spd || 0);
-        let pTotal = pDice + pSpd;
+        let pTotal = diceValue + pSpd;
         let eDice = Math.floor(Math.random() * 6) + 1;
         let eTotal = eDice + battleData.enemy.spd;
 
-        logGame(`🎲 先攻判定：你出骰 [ ${pDice} ] + 速 ${pSpd} = ${pTotal}`);
-        logGame(`👹 ${battleData.enemy.name} 出骰 [ ${eDice} ] + 速 ${battleData.enemy.spd} = ${eTotal}`);
+        logGame(`🎲 先攻判定：你投出 [ ${diceValue} ] + 速 ${pSpd} = ${pTotal}`);
+        logGame(`👹 ${battleData.enemy.name} 投出 [ ${eDice} ] + 速 ${battleData.enemy.spd} = ${eTotal}`);
 
         animateAndRollDice(index, () => {
             if (pTotal >= eTotal) {
@@ -614,22 +662,36 @@ function chooseDice(index) {
         });
     } 
     else if (gameState === "BATTLE_PLAYER") {
-        let diceValue = currentDice[index];
         let baseAtk = player.atk + (player.accessory?.effect?.atk || 0);
         let baseMatk = player.matk + (player.accessory?.effect?.matk || 0);
         let weaponFaceValue = player.weapon.dice[diceValue - 1];
 
         let dmg = 0;
+        let logPrefix = "";
+
         if (player.weapon.isMagic) {
             dmg = baseMatk + weaponFaceValue;
-            logGame(`🔮 攻擊！使用骰子 [ ${diceValue} ]，魔法 ${baseMatk} + 骰面 ${weaponFaceValue} = ${dmg} 傷害 (無視防禦)`);
+            logPrefix = `🔮 攻擊！使用骰子 [ ${diceValue} ]，魔法 ${baseMatk} + 骰面 ${weaponFaceValue} = ${dmg} 傷害 (無視防禦)`;
         } else {
             let totalAtk = baseAtk + weaponFaceValue;
             dmg = totalAtk - battleData.enemy.def;
             if (dmg < 1) dmg = 1;
-            logGame(`⚔️ 攻擊！使用骰子 [ ${diceValue} ]，攻擊 ${baseAtk} + 骰面 ${weaponFaceValue} = 總攻 ${totalAtk} (敵防 ${battleData.enemy.def})，造成 ${dmg} 傷害`);
+            logPrefix = `⚔️ 攻擊！使用骰子 [ ${diceValue} ]，攻擊 ${baseAtk} + 骰面 ${weaponFaceValue} = 總攻 ${totalAtk} (敵防 ${battleData.enemy.def})，造成 ${dmg} 傷害`;
         }
 
+        // 職業被動：攻擊回合 6 點觸發
+        if (diceValue === 6) {
+            if (player.job === "鬥雞") {
+                let oldDmg = dmg;
+                dmg = Math.floor(dmg * 1.5);
+                logPrefix = `<span style='color:#ff4d4d;'>💥【暴擊】鬥雞觸發紅字特寫！傷害由 ${oldDmg} 暴增 1.5 倍變為 ${dmg} 點！</span>`;
+            } else if (player.job === "咕雞") {
+                battleData.enemyStunned = true;
+                logPrefix += `<br><span style='color:#4ea8de;'>🌀【震擊】咕雞觸發藍字特寫！音波共振使 ${battleData.enemy.name} 陷入暈眩！</span>`;
+            }
+        }
+
+        logGame(logPrefix);
         battleData.enemy.hp = Math.max(0, battleData.enemy.hp - dmg);
         document.getElementById("b-e-hp").innerText = battleData.enemy.hp;
 
@@ -642,21 +704,35 @@ function chooseDice(index) {
         });
     } 
     else if (gameState === "BATTLE_ENEMY") {
-        let diceValue = currentDice[index];
         let armorFaceValue = player.armor.dice[diceValue - 1];
-        
-        let finalDmg = battleData.enemyCurrentAtk - armorFaceValue;
-        if(finalDmg < 1) finalDmg = 1;
+        let isEvaded = false;
+
+        // 職業被動：防守回合 6 點觸發
+        if (diceValue === 6) {
+            if (player.job === "飛雞") {
+                isEvaded = true;
+                logGame(`<span style='color:#2a9d8f;'>🍃【反擊】飛雞觸發綠字特寫！身輕如燕，完全閃避了這次所有攻擊傷害！</span>`);
+            } else if (player.job === "肉雞") {
+                let healAmt = Math.floor(player.maxHp * 0.1);
+                player.hp = Math.min(player.maxHp, player.hp + healAmt);
+                logGame(`<span style='color:#f4a261;'>🍗【食補】肉雞觸發黃字特寫！在挨打時咬了一口雞腿，生命值恢復了 ${healAmt} 點！</span>`);
+                document.getElementById("b-p-hp").innerText = player.hp;
+            }
+        }
+
+        let finalDmg = isEvaded ? 0 : (battleData.enemyCurrentAtk - armorFaceValue);
+        if(!isEvaded && finalDmg < 1) finalDmg = 1;
 
         player.hp = Math.max(0, player.hp - finalDmg);
         document.getElementById("b-p-hp").innerText = player.hp;
 
-        logGame(`🛡️ 防禦！你祭出防禦骰 [ ${diceValue} ]，防具格擋值 ${armorFaceValue} 點。`);
-        logGame(`💥 結算受到傷害：${finalDmg} 點。 (賸餘HP: ${player.hp})`);
+        if(!isEvaded) {
+            logGame(`🛡️ 防禦！你選用防禦骰 [ ${diceValue} ]，格擋值 ${armorFaceValue} 點。受到傷害：${finalDmg} 點。`);
+        }
 
         animateAndRollDice(index, () => {
             if (player.hp <= 0) {
-                gameOver();
+                handlePlayerDeath(); // 觸發死亡判定
             } else {
                 enterPlayerTurn();
             }
@@ -686,7 +762,7 @@ function evaluateCell() {
     }
 }
 
-// --- 戰鬥配置 ---
+// --- 戰鬥引擎 ---
 function initBattle(type) {
     gameState = "BATTLE_INIT";
     switchView("BATTLE");
@@ -701,7 +777,8 @@ function initBattle(type) {
         enemy: {
             name: template.name, hp: template.hp, maxHp: template.hp, atk: template.atk, def: template.def,
             spd: Math.floor(Math.random() * 2) + 1, exp: template.exp, gold: template.gold
-        }
+        },
+        enemyStunned: false // 暈眩狀態標記
     };
 
     document.getElementById("b-e-name").innerText = battleData.enemy.name;
@@ -719,15 +796,25 @@ function enterPlayerTurn() {
     gameState = "BATTLE_PLAYER";
     document.getElementById("dice-title").innerText = "⚔️ 請選擇攻擊骰：";
     document.getElementById("battle-phase-msg").innerText = "⚔️ 你的回合：選擇骰子啟動武器骰面進攻！";
+    updateUI();
 }
 
 function enterEnemyTurn() {
+    // 檢查敵方是否被咕雞「震擊」暈眩
+    if (battleData.enemyStunned) {
+        logGame(`🌀 ${battleData.enemy.name} 處於暈眩狀態，被迫跳過攻擊回合！`);
+        battleData.enemyStunned = false; // 解除暈眩
+        enterPlayerTurn();
+        return;
+    }
+
     gameState = "BATTLE_ENEMY";
     let eDice = Math.floor(Math.random() * 6) + 1;
     battleData.enemyCurrentAtk = battleData.enemy.atk + eDice;
     logGame(`👹 ${battleData.enemy.name} 出招預告：基礎 ${battleData.enemy.atk} + 隨機骰 [ ${eDice} ] = 總攻擊力將達 ${battleData.enemyCurrentAtk}`);
     document.getElementById("dice-title").innerText = "🛡️ 請選擇防禦骰：";
     document.getElementById("battle-phase-msg").innerText = `🛡️ 敵方回合：請點擊骰子翻開防具格擋！`;
+    updateUI();
 }
 
 function winBattle() {
@@ -735,15 +822,19 @@ function winBattle() {
     player.exp += e.exp; player.gold += e.gold;
     logGame(`🎉 戰鬥勝利！獲得經驗值 +${e.exp}, 金幣 +$${e.gold}`);
 
-    let upExp = player.level * 10;
-    if (player.exp >= upExp) {
-        player.exp -= upExp; player.level++; player.maxHp += 8; player.hp = player.maxHp;
-        player.atk += 1; player.spd += 1;
-        logGame(`✨ 升級了！達到 LV ${player.level}，狀態全恢復！`);
+    // 死雞被動：戰勝恢復10%最大生命值
+    if(player.isUndead) {
+        let undeadHeal = Math.floor(player.maxHp * 0.1);
+        player.hp = Math.min(player.maxHp, player.hp + undeadHeal);
+        logGame(`👻【亡靈】死雞吞噬了靈魂碎屑，吸血恢復了 ${undeadHeal} 點生命。`);
     }
+
+    checkLevelUp();
 
     if (player.pos >= 150) {
         gameState = "OVER"; switchView("OVER");
+        document.getElementById("contract-actions").style.display = "none";
+        document.getElementById("restart-only-btn").style.display = "inline-block";
         document.getElementById("over-title").innerText = "🏆 榮耀通關 🏆";
         document.getElementById("over-msg").innerText = `你成功擊敗了千層邪神大魔王！最終結算：等級 LV ${player.level}，資產 $${player.gold}。`;
         return;
@@ -754,13 +845,67 @@ function winBattle() {
     checkJobThreshold();
 }
 
-function gameOver() {
-    gameState = "OVER"; switchView("OVER");
-    document.getElementById("over-title").innerText = "💀 菜雞挑戰失敗 💀";
-    document.getElementById("over-msg").innerText = `你在第 ${player.pos} 格力戰身亡，變成了美味的炸雞排。`;
+function checkLevelUp() {
+    let upExp = player.level * 10;
+    if (player.exp >= upExp) {
+        player.exp -= upExp; player.level++; player.maxHp += 8; player.hp = player.maxHp;
+        player.atk += 1; player.spd += 1;
+        logGame(`✨ 升級了！達到 LV ${player.level}，狀態全恢復！`);
+    }
 }
 
-// --- 商店機制（修改：保留商品、局部置灰、顯示骰面） ---
+// --- 死亡/契約重來判定（修改2：死雞降臨） ---
+function handlePlayerDeath() {
+    gameState = "OVER";
+    switchView("OVER");
+    
+    // 滿足死雞契約條件：未轉過死雞，且等級大於2級
+    if (!player.isUndead && player.level > 2) {
+        document.getElementById("over-title").innerText = "💀 亡靈的低語... 💀";
+        document.getElementById("over-msg").innerHTML = `你戰死了，變成了冰冷的炸雞。但在迷離之際，靈魂深處響起一個沙啞的聲音：<br><br><span style="color:var(--magic); font-weight:bold;">「不甘心就這樣結束嗎？菜雞。奉獻你的不滅靈魂與我締結契約，你將獲得冥界重生的力量，代價是失去溫度與退路...你願意嗎？」</span>`;
+        document.getElementById("contract-actions").style.display = "flex";
+        document.getElementById("restart-only-btn").style.display = "none";
+    } else {
+        // 一般常規死亡
+        document.getElementById("over-title").innerText = "💀 挑戰失敗 💀";
+        if (player.isUndead) {
+            document.getElementById("over-msg").innerText = `身為「死雞」的你再次魂飛魄散，契約徹底粉碎，無法再次復活。`;
+        } else {
+            document.getElementById("over-msg").innerText = `你在第 ${player.pos} 格遺憾戰死（等級小於或等於2級無法觸發亡靈低語）。`;
+        }
+        document.getElementById("contract-actions").style.display = "none";
+        document.getElementById("restart-only-btn").style.display = "inline-block";
+    }
+}
+
+function signUndeadContract() {
+    player.job = "死雞";
+    player.isUndead = true;
+    player.hasChangedJob = true; // 無法再轉職其他職業
+    
+    // 屬性更迭（最大生命+20，攻擊+3，魔法+3，速度-2）
+    player.maxHp += 20;
+    player.hp = player.maxHp; // 滿血復活
+    player.atk += 3;
+    player.matk += 3;
+    player.spd = Math.max(1, player.spd - 2); // 速度最低為1
+
+    alert("🔮 契約結成！你轉職成了【死雞】，帶著冥火從地獄歸來！");
+    logGame(`🔮 絕境重生：你簽署了惡魔契約，靈魂黑化轉職為【死雞】！`);
+
+    // 重回世間（就在原地重新出發）
+    gameState = "MOVE";
+    document.getElementById("dice-title").innerText = "請選擇骰子前進：";
+    switchView("MOVE");
+    document.getElementById("move-msg").innerText = `你從冥界重生回到了第 ${player.pos} 格。`;
+    updateUI();
+}
+
+function restartGame() {
+    location.reload();
+}
+
+// --- 商店系統 ---
 function generateShopItems() {
     let tier = player.pos > 90 ? "後" : (player.pos > 30 ? "中" : "初");
     let poolW = WEAPONS.filter(w => w.tier === tier && w.cost > 0);
@@ -838,22 +983,21 @@ function buyShopIndex(idx) {
         if(item.effect?.maxHp) { player.maxHp += item.effect.maxHp; player.hp += item.effect.maxHp; }
     }
 
-    // 即時標記已售出並重繪商店，玩家狀態欄即時刷新
     shopNode.soldOut = true;
     logGame(`🛒 成功購買裝備：【${item.name}】`);
     updateUI(); 
     renderShopList();
 }
 
-// 話嘮雞專屬：嘴砲刷新商店按鈕
+// 任何人通用：更新商品
 function refreshShop() {
     if(player.gold < refreshCost) {
-        alert("錢不夠，無法發動嘴砲刷新！");
+        alert("金幣不足，無法更新商店貨架！");
         return;
     }
     player.gold -= refreshCost;
-    logGame(`💬 話嘮雞發動口才天賦，消耗 $${refreshCost} 逼迫老闆更換新貨！`);
-    refreshCost += 5; // 每次代價遞增
+    logGame(`🔄 支付了 $${refreshCost} 金幣，商人重新整理了貨架商品。`);
+    refreshCost += 5; // 費用梯次提高5元
     generateShopItems();
     updateUI();
     renderShopList();
@@ -866,9 +1010,12 @@ function exitShop() {
     checkJobThreshold();
 }
 
-// --- 隨機事件處理 ---
+// --- 隨機事件（修改4：死雞無法朝聖） ---
 function triggerRandomEvent() {
     let r = Math.random();
+    document.getElementById("event-btn-confirm").style.display = "inline-block";
+    document.getElementById("event-btn-skip").style.display = "none";
+
     if (r < 0.34) {
         document.getElementById("move-msg").innerText = "🔮【事件】你在乾草堆撿到一個錢包。";
         currentEventEffect = () => { player.gold += 15; logGame("💰 撿到 $15 金幣。"); exitEvent(); };
@@ -880,18 +1027,28 @@ function triggerRandomEvent() {
             exitEvent();
         };
     } else {
-        document.getElementById("move-msg").innerText = "🔮【事件】遇見朝聖祭壇。";
-        currentEventEffect = () => { player.hp = player.maxHp; logGame("⛲ 全員狀態補滿。"); exitEvent(); };
+        // 朝聖祭壇
+        document.getElementById("move-msg").innerText = "🔮【事件】前方遇見神聖的朝聖祭壇。";
+        
+        if (player.isUndead) {
+            // 死雞：強制只能避開
+            document.getElementById("move-msg").innerText += ` \n🚫 [警告] 由於你是渾身充滿怨氣的「死雞」，聖光對你有強烈排斥感。你無法進行受洗恢復！`;
+            document.getElementById("event-btn-confirm").style.display = "none";
+            document.getElementById("event-btn-skip").style.display = "inline-block";
+        } else {
+            currentEventEffect = () => { player.hp = player.maxHp; logGame(" Fountain 全員狀態在朝聖祭壇補滿。"); exitEvent(); };
+        }
     }
     document.getElementById("event-action").style.display = "inline-block";
 }
+
 function triggerEventEffect() { if(currentEventEffect) currentEventEffect(); }
 function exitEvent() { document.getElementById("event-action").style.display = "none"; currentEventEffect = null; checkJobThreshold(); }
 
-// --- 轉職覺醒審查 ---
+// --- 轉職審核 ---
 function checkJobThreshold() {
     updateUI();
-    if (player.hasChangedJob) return;
+    if (player.hasChangedJob) return; // 死雞或其他轉職過的人無法再次轉職
     let validJobs = JOBS.filter(j => j.check(player));
     if (validJobs.length > 0) {
         gameState = "JOB"; switchView("JOB");
@@ -908,6 +1065,7 @@ function checkJobThreshold() {
         });
     }
 }
+
 function confirmJob(id) {
     let j = JOBS.find(x => x.id === id);
     player.job = j.name; player.hasChangedJob = true;
@@ -920,11 +1078,10 @@ function confirmJob(id) {
     gameState = "MOVE"; document.getElementById("dice-title").innerText = "請選擇骰子前進："; switchView("MOVE"); updateUI();
 }
 
-// --- 彈窗開關控制 ---
 function openModal() { document.getElementById("rule-modal").style.display = "flex"; }
 function closeModal() { document.getElementById("rule-modal").style.display = "none"; }
 
-// 啟動初始化
+// 初始化
 updateUI();
 </script>
 </body>
